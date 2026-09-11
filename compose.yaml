@@ -1,0 +1,14 @@
+services:
+  tibot:
+    build: .
+    restart: unless-stopped
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN in the environment or .env}
+      DATABASE_PATH: /data/tibot.db
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - tibot-data:/data
+
+volumes:
+  tibot-data:
+

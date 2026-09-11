@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+.uv-cache
+.uv-python
+data
+tests
+__pycache__
+*.pyc
+.env
+
