@@ -17,8 +17,8 @@ relocated with `DATABASE_PATH`; logging is configured with `LOG_LEVEL`.
 
 Run locally:
 
-```console
-$env:BOT_TOKEN="123:telegram-token"  # PowerShell
+```bash
+export BOT_TOKEN="123:telegram-token"
 uv run tibot
 ```
 
