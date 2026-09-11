@@ -52,6 +52,9 @@ def _default_content_root() -> Path:
     configured = os.getenv("TIBOT_CONTENT_ROOT")
     if configured:
         return Path(configured)
+    checkout_content = Path.cwd() / "modules" / "ti4"
+    if checkout_content.exists():
+        return checkout_content
     return Path(__file__).resolve().parents[3] / "modules" / "ti4"
 
 
@@ -86,4 +89,3 @@ def _parse_tiles(data: dict[str, Any]) -> dict[str, Tile]:
             anomaly=raw.get("anomaly"),
         )
     return result
-

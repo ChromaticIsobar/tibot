@@ -1,4 +1,6 @@
-FROM ghcr.io/astral-sh/uv:0.11.7-python3.12-bookworm-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /app
@@ -18,10 +20,10 @@ RUN mkdir /data && chown tibot:tibot /data
 
 ENV PATH="/app/.venv/bin:$PATH" \
     DATABASE_PATH=/data/tibot.db \
+    TIBOT_CONTENT_ROOT=/app/modules/ti4 \
     PYTHONUNBUFFERED=1
 USER tibot
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD ["python", "-m", "tibot.healthcheck"]
 CMD ["tibot"]
-
