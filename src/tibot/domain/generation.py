@@ -1,0 +1,134 @@
+"""Deterministic setup generators."""
+
+from __future__ import annotations
+
+import secrets
+from collections.abc import Sequence
+from random import Random
+from statistics import pstdev
+
+from tibot.domain.content import ContentCatalog
+from tibot.domain.models import GeneratedSetup, Slice, Tile
+
+
+class SetupGenerator:
+    def __init__(self, catalog: ContentCatalog) -> None:
+        self.catalog = catalog
+
+    def milty(self, player_ids: Sequence[int], seed: int | None = None) -> GeneratedSetup:
+        self._validate_players(player_ids)
+        seed = seed if seed is not None else secrets.randbits(63)
+        rng = Random(seed)
+        slice_count = len(player_ids) + 1
+        factions = rng.sample(list(self.catalog.factions), len(player_ids) + 2)
+        slices = self._balanced_slices(rng, slice_count)
+        order = list(player_ids)
+        rng.shuffle(order)
+        return GeneratedSetup(seed=seed, factions=factions, slices=slices, order=order)
+
+    def whole_board(self, player_ids: Sequence[int], seed: int | None = None) -> GeneratedSetup:
+        self._validate_players(player_ids)
+        seed = seed if seed is not None else secrets.randbits(63)
+        rng = Random(seed)
+        blue = self._tiles("blue")
+        red = self._tiles("red")
+        chosen = rng.sample(blue, 12) + rng.sample(red, 6)
+        rng.shuffle(chosen)
+        positions = _radius_two_positions()
+        center_id = "112" if "112" in self.catalog.tiles else "18"
+        board = {"0,0": center_id}
+        board.update({f"{q},{r}": tile.id for (q, r), tile in zip(positions, chosen, strict=True)})
+        order = list(player_ids)
+        rng.shuffle(order)
+        factions = rng.sample(list(self.catalog.factions), len(player_ids) + 2)
+        warnings = self._board_warnings(board)
+        values = [tile.value for tile in chosen]
+        score = round(sum(values) / len(values) - pstdev(values), 2)
+        return GeneratedSetup(
+            seed=seed,
+            factions=factions,
+            board=board,
+            order=order,
+            warnings=warnings,
+            score=score,
+        )
+
+    def random_factions(self, count: int, seed: int | None = None) -> GeneratedSetup:
+        if not 1 <= count <= len(self.catalog.factions):
+            raise ValueError("Faction count is outside the available range")
+        seed = seed if seed is not None else secrets.randbits(63)
+        return GeneratedSetup(seed=seed, factions=Random(seed).sample(list(self.catalog.factions), count))
+
+    @staticmethod
+    def random_order(player_ids: Sequence[int], seed: int | None = None) -> GeneratedSetup:
+        if not player_ids:
+            raise ValueError("At least one player is required")
+        seed = seed if seed is not None else secrets.randbits(63)
+        order = list(player_ids)
+        Random(seed).shuffle(order)
+        return GeneratedSetup(seed=seed, order=order)
+
+    def _balanced_slices(self, rng: Random, count: int) -> list[Slice]:
+        best: tuple[float, list[list[Tile]]] | None = None
+        blue = self._tiles("blue")
+        red = self._tiles("red")
+        for _ in range(512):
+            selected_blue = rng.sample(blue, count * 3)
+            selected_red = rng.sample(red, count * 2)
+            rng.shuffle(selected_blue)
+            rng.shuffle(selected_red)
+            groups = [
+                selected_blue[i * 3 : i * 3 + 3] + selected_red[i * 2 : i * 2 + 2]
+                for i in range(count)
+            ]
+            values = [sum(tile.value for tile in group) for group in groups]
+            wormhole_penalty = sum(2 for group in groups if not any(tile.wormhole for tile in group))
+            score = pstdev(values) + wormhole_penalty
+            if best is None or score < best[0]:
+                best = score, groups
+        assert best is not None
+        slices: list[Slice] = []
+        for index, group in enumerate(best[1], start=1):
+            slices.append(
+                Slice(
+                    id=index,
+                    tiles=tuple(tile.id for tile in group),
+                    resources=sum(tile.resources for tile in group),
+                    influence=sum(tile.influence for tile in group),
+                    wormholes=tuple(tile.wormhole for tile in group if tile.wormhole),
+                )
+            )
+        return slices
+
+    def _tiles(self, color: str) -> list[Tile]:
+        return [tile for tile in self.catalog.tiles.values() if tile.color == color]
+
+    def _board_warnings(self, board: dict[str, str]) -> list[str]:
+        warnings: list[str] = []
+        for position, tile_id in board.items():
+            tile = self.catalog.tiles[tile_id]
+            if not tile.wormhole:
+                continue
+            q, r = map(int, position.split(","))
+            for dq, dr in ((1, 0), (0, 1), (-1, 1)):
+                neighbor_id = board.get(f"{q + dq},{r + dr}")
+                if neighbor_id and self.catalog.tiles[neighbor_id].wormhole == tile.wormhole:
+                    warnings.append(f"Adjacent {tile.wormhole} wormholes at {position}")
+        return warnings
+
+    @staticmethod
+    def _validate_players(player_ids: Sequence[int]) -> None:
+        if not 3 <= len(player_ids) <= 6:
+            raise ValueError("A setup requires 3 to 6 players")
+        if len(set(player_ids)) != len(player_ids):
+            raise ValueError("Players must be unique")
+
+
+def _radius_two_positions() -> list[tuple[int, int]]:
+    return [
+        (q, r)
+        for q in range(-2, 3)
+        for r in range(-2, 3)
+        if (q, r) != (0, 0) and max(abs(q), abs(r), abs(q + r)) <= 2
+    ]
+
