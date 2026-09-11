@@ -45,6 +45,22 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
         lines.extend(("", f"Current pick: <b>{draft_player.display_name}</b>"))
     if game.setup is not None:
         lines.extend(("", f"Seed: <code>{game.setup.seed}</code>"))
+        if game.status is GameStatus.DRAFTING:
+            lines.append("")
+            lines.extend(
+                f"Slice {item.id}: {', '.join(item.tiles)} "
+                f"({item.resources} resources / {item.influence} influence)"
+                for item in game.setup.slices
+            )
+        if game.mode is GameMode.WHOLE_BOARD:
+            names = {player.id: player.display_name for player in game.players}
+            lines.extend(("", "Faction pool:"))
+            lines.extend(f"- {faction.name}" for faction in game.setup.factions)
+            lines.extend(("", "Seating order:"))
+            lines.extend(
+                f"{index}. {names[player_id]}" + (" (Speaker)" if index == 1 else "")
+                for index, player_id in enumerate(game.setup.order, start=1)
+            )
         if game.setup.score is not None:
             lines.append(f"Board score: {game.setup.score}")
         lines.extend(f"Warning: {warning}" for warning in game.setup.warnings)
@@ -84,12 +100,10 @@ def draft_keyboard(
     return builder.as_markup()
 
 
-def complete_keyboard(game: Game) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[_button(game, "Reroll", "reroll")]]
-        if game.mode is GameMode.WHOLE_BOARD
-        else []
-    )
+def complete_keyboard(game: Game) -> InlineKeyboardMarkup | None:
+    if game.mode is not GameMode.WHOLE_BOARD:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[_button(game, "Reroll", "reroll")]])
 
 
 def random_keyboard() -> InlineKeyboardMarkup:

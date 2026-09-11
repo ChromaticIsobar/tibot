@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import logging
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
@@ -57,7 +57,8 @@ def create_router(service: GameService) -> Router:
         if game is None:
             await message.answer("Start a setup first with /setup.")
             return
-        if not _joined(game, message.from_user.id):
+        user = _message_user(message)
+        if not _joined(game, user.id):
             await message.answer("Only joined players can add placeholders.")
             return
         name = (command.args or "").strip()
@@ -76,9 +77,10 @@ def create_router(service: GameService) -> Router:
         if not name:
             await message.answer("Usage: /claim NAME")
             return
+        user = _message_user(message)
         try:
             await service.repository.claim(
-                game.id, name, message.from_user.id, message.from_user.username
+                game.id, name, user.id, user.username
             )
             await message.answer(f"Claimed {html.escape(name)}.")
         except ValueError as exc:
@@ -90,9 +92,9 @@ def create_router(service: GameService) -> Router:
 
     @router.message(Command("result"))
     async def result_command(message: Message) -> None:
-        game = await service.repository.get_active(message.chat.id)
+        game = await service.repository.get_latest(message.chat.id)
         if game is None:
-            await message.answer("There is no active setup. Completed results remain in the chat.")
+            await message.answer("There is no setup in this chat yet.")
             return
         await _send_game(message, game, service)
 
@@ -110,9 +112,10 @@ def create_router(service: GameService) -> Router:
                     GameMode(callback_data.value),
                 )
             else:
-                game = await service.repository.get_game(callback_data.game_id)
-                if game is None or game.chat_id != query.message.chat.id:
+                loaded_game = await service.repository.get_game(callback_data.game_id)
+                if loaded_game is None or loaded_game.chat_id != query.message.chat.id:
                     raise ValueError("This setup no longer exists")
+                game = loaded_game
                 if game.revision != callback_data.revision:
                     raise ConflictError("This screen is stale; use /setup to refresh")
                 game = await _apply_setup_action(query, callback_data, game, service)
@@ -134,7 +137,8 @@ def create_router(service: GameService) -> Router:
             else:
                 if game is None or not game.players:
                     raise ValueError("This randomizer needs an active setup roster")
-                result = service.generator.random_order([player.id for player in game.players if player.id])
+                player_ids = [player.id for player in game.players if player.id is not None]
+                result = service.generator.random_order(player_ids)
                 names = {player.id: player.display_name for player in game.players}
                 ordered = [names[player_id] for player_id in result.order]
                 if callback_data.action == "speaker":
@@ -143,7 +147,9 @@ def create_router(service: GameService) -> Router:
                     text = "\n".join(f"{i}. {name}" for i, name in enumerate(ordered, 1))
             await query.answer()
             if query.message:
-                await query.message.answer(f"{text}\n\nSeed: <code>{result.seed}</code>", parse_mode="HTML")
+                await query.message.answer(
+                    f"{text}\n\nSeed: <code>{result.seed}</code>", parse_mode="HTML"
+                )
         except ValueError as exc:
             await query.answer(str(exc), show_alert=True)
 
@@ -187,7 +193,7 @@ async def _send_game(message: Message, game: Game, service: GameService) -> None
 
 
 async def _edit_game(query: CallbackQuery, game: Game, service: GameService) -> None:
-    if query.message is None:
+    if not isinstance(query.message, Message):
         return
     draft_player, markup = await _screen(game, service)
     await query.message.edit_text(
@@ -213,6 +219,7 @@ async def _screen(game: Game, service: GameService):  # type: ignore[no-untyped-
 async def _send_board(message: Message, game: Game, service: GameService) -> None:
     image = await service.render_result(game)
     if image:
+        assert game.setup is not None
         await message.answer_photo(
             BufferedInputFile(image, filename=f"tibot-{game.setup.seed}.png")
         )
@@ -229,3 +236,8 @@ async def _run_message(message: Message, operation, service: GameService) -> Non
 def _joined(game: Game, user_id: int) -> bool:
     return any(player.telegram_user_id == user_id for player in game.players)
 
+
+def _message_user(message: Message):  # type: ignore[no-untyped-def]
+    if message.from_user is None:
+        raise ValueError("This command requires a Telegram user")
+    return message.from_user

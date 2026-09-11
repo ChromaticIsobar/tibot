@@ -8,7 +8,7 @@ from random import Random
 from statistics import pstdev
 
 from tibot.domain.content import ContentCatalog
-from tibot.domain.models import GeneratedSetup, Slice, Tile
+from tibot.domain.models import GeneratedSetup, Player, Slice, Tile
 
 
 class SetupGenerator:
@@ -57,7 +57,49 @@ class SetupGenerator:
         if not 1 <= count <= len(self.catalog.factions):
             raise ValueError("Faction count is outside the available range")
         seed = seed if seed is not None else secrets.randbits(63)
-        return GeneratedSetup(seed=seed, factions=Random(seed).sample(list(self.catalog.factions), count))
+        return GeneratedSetup(
+            seed=seed,
+            factions=Random(seed).sample(list(self.catalog.factions), count),
+        )
+
+    def assemble_milty(self, setup: GeneratedSetup, players: Sequence[Player]) -> None:
+        """Assemble completed draft choices into a deterministic galaxy."""
+        if any(
+            player.faction is None or player.slice_id is None or player.seat is None
+            for player in players
+        ):
+            raise ValueError("Every player needs a faction, slice, and seat")
+        faction_home = {faction.name: faction.home_system for faction in self.catalog.factions}
+        slice_by_id = {item.id: item for item in setup.slices}
+        ordered = sorted(players, key=lambda player: player.seat or 0)
+        home_candidates = ((3, 0), (0, 3), (-3, 3), (-3, 0), (0, -3), (3, -3))
+        home_indices = [round(index * 6 / len(ordered)) % 6 for index in range(len(ordered))]
+        open_positions = [
+            (q, r)
+            for q in range(-3, 4)
+            for r in range(-3, 4)
+            if 1 <= max(abs(q), abs(r), abs(q + r)) <= 3
+            and (q, r) not in home_candidates
+        ]
+        board = {"0,0": "112" if "112" in self.catalog.tiles else "18"}
+        for player, home_index in zip(ordered, home_indices, strict=True):
+            home = home_candidates[home_index]
+            home_angle = _position_angle(home)
+            ranked = sorted(
+                open_positions,
+                key=lambda position: (
+                    _angle_distance(_position_angle(position), home_angle),
+                    -max(abs(position[0]), abs(position[1]), abs(sum(position))),
+                ),
+            )
+            chosen_positions = ranked[:5]
+            for position in chosen_positions:
+                open_positions.remove(position)
+            selected_slice = slice_by_id[int(player.slice_id or 0)]
+            for position, tile_id in zip(chosen_positions, selected_slice.tiles, strict=True):
+                board[f"{position[0]},{position[1]}"] = tile_id
+            board[f"{home[0]},{home[1]}"] = faction_home[str(player.faction)]
+        setup.board = board
 
     @staticmethod
     def random_order(player_ids: Sequence[int], seed: int | None = None) -> GeneratedSetup:
@@ -82,7 +124,9 @@ class SetupGenerator:
                 for i in range(count)
             ]
             values = [sum(tile.value for tile in group) for group in groups]
-            wormhole_penalty = sum(2 for group in groups if not any(tile.wormhole for tile in group))
+            wormhole_penalty = sum(
+                2 for group in groups if not any(tile.wormhole for tile in group)
+            )
             score = pstdev(values) + wormhole_penalty
             if best is None or score < best[0]:
                 best = score, groups
@@ -132,3 +176,15 @@ def _radius_two_positions() -> list[tuple[int, int]]:
         if (q, r) != (0, 0) and max(abs(q), abs(r), abs(q + r)) <= 2
     ]
 
+
+def _position_angle(position: tuple[int, int]) -> float:
+    import math
+
+    q, r = position
+    return math.atan2(1.5 * r, math.sqrt(3) * (q + r / 2))
+
+
+def _angle_distance(left: float, right: float) -> float:
+    import math
+
+    return abs((left - right + math.pi) % (2 * math.pi) - math.pi)

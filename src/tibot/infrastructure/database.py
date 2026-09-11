@@ -140,6 +140,13 @@ class GameRepository:
         row = await cursor.fetchone()
         return await self.get_game(int(row["id"])) if row else None
 
+    async def get_latest(self, chat_id: int) -> Game | None:
+        cursor = await self.connection.execute(
+            "SELECT id FROM games WHERE chat_id=? ORDER BY id DESC LIMIT 1", (chat_id,)
+        )
+        row = await cursor.fetchone()
+        return await self.get_game(int(row["id"])) if row else None
+
     async def get_game(self, game_id: int) -> Game | None:
         cursor = await self.connection.execute("SELECT * FROM games WHERE id=?", (game_id,))
         row = await cursor.fetchone()
@@ -169,18 +176,23 @@ class GameRepository:
         telegram_username: str | None = None,
     ) -> Player:
         async with self._lock:
-            cursor = await self.connection.execute("SELECT status FROM games WHERE id=?", (game_id,))
+            cursor = await self.connection.execute(
+                "SELECT status FROM games WHERE id=?", (game_id,)
+            )
             row = await cursor.fetchone()
             if row is None or row["status"] != GameStatus.ROSTER.value:
                 raise ValueError("Players can only be added while building the roster")
             count_cursor = await self.connection.execute(
                 "SELECT COUNT(*) AS count FROM players WHERE game_id=?", (game_id,)
             )
-            if int((await count_cursor.fetchone())["count"]) >= 6:
+            count_row = await count_cursor.fetchone()
+            assert count_row is not None
+            if int(count_row["count"]) >= 6:
                 raise ValueError("A game can have at most 6 players")
             try:
                 inserted = await self.connection.execute(
-                    "INSERT INTO players(game_id, display_name, telegram_user_id, telegram_username) "
+                    "INSERT INTO players(game_id, display_name, telegram_user_id, "
+                    "telegram_username) "
                     "VALUES (?, ?, ?, ?)",
                     (game_id, display_name.strip(), telegram_user_id, telegram_username),
                 )
@@ -209,7 +221,8 @@ class GameRepository:
             try:
                 cursor = await self.connection.execute(
                     "UPDATE players SET telegram_user_id=?, telegram_username=? "
-                    "WHERE game_id=? AND display_name=? COLLATE NOCASE AND telegram_user_id IS NULL",
+                    "WHERE game_id=? AND display_name=? COLLATE NOCASE "
+                    "AND telegram_user_id IS NULL",
                     (user_id, username, game_id, name.strip()),
                 )
             except aiosqlite.IntegrityError as exc:
@@ -233,7 +246,15 @@ class GameRepository:
                 "UPDATE games SET previous_setup_json=setup_json, setup_json=?, seed=?, status=?, "
                 "draft_order_json=?, draft_pick_index=?, revision=revision+1, "
                 "updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=?",
-                (encoded, setup.seed, status.value, order, draft.pick_index if draft else 0, game.id, game.revision),
+                (
+                    encoded,
+                    setup.seed,
+                    status.value,
+                    order,
+                    draft.pick_index if draft else 0,
+                    game.id,
+                    game.revision,
+                ),
             )
             if cursor.rowcount != 1:
                 await self.connection.rollback()
@@ -245,7 +266,9 @@ class GameRepository:
                 "INSERT INTO results(game_id, seed, payload_json) VALUES (?, ?, ?)",
                 (game.id, setup.seed, encoded),
             )
-            await self.connection.execute("DELETE FROM generated_options WHERE game_id=?", (game.id,))
+            await self.connection.execute(
+                "DELETE FROM generated_options WHERE game_id=?", (game.id,)
+            )
             if status is GameStatus.DRAFTING:
                 for faction in setup.factions:
                     await self.connection.execute(
@@ -276,6 +299,28 @@ class GameRepository:
             raise ValueError("Game does not have an active draft")
         return DraftState(tuple(json.loads(row["draft_order_json"])), int(row["draft_pick_index"]))
 
+    async def finalize_setup(self, game: Game) -> Game:
+        if game.setup is None:
+            raise ValueError("Game has no generated setup")
+        encoded = json.dumps(game.setup.to_dict(), separators=(",", ":"))
+        async with self._lock:
+            cursor = await self.connection.execute(
+                "UPDATE games SET setup_json=?, revision=revision+1, updated_at=CURRENT_TIMESTAMP "
+                "WHERE id=? AND revision=?",
+                (encoded, game.id, game.revision),
+            )
+            if cursor.rowcount != 1:
+                await self.connection.rollback()
+                raise ConflictError("This setup changed; refresh and try again")
+            await self.connection.execute(
+                "UPDATE results SET payload_json=? WHERE game_id=? AND is_current=1",
+                (encoded, game.id),
+            )
+            await self.connection.commit()
+        updated = await self.get_game(game.id)
+        assert updated is not None
+        return updated
+
     async def available_options(self, game_id: int, kind: PickKind) -> list[str]:
         cursor = await self.connection.execute(
             "SELECT option_key FROM generated_options WHERE game_id=? AND kind=? AND available=1 "
@@ -301,7 +346,11 @@ class GameRepository:
                 raise ValueError("Player is not in this game")
             if player.telegram_user_id is not None and player.telegram_user_id != picked_by:
                 raise ValueError("Only that player can make this pick")
-            field = {PickKind.FACTION: "faction", PickKind.SLICE: "slice_id", PickKind.SEAT: "seat"}[kind]
+            field = {
+                PickKind.FACTION: "faction",
+                PickKind.SLICE: "slice_id",
+                PickKind.SEAT: "seat",
+            }[kind]
             if getattr(player, field) is not None:
                 raise ValueError(f"Player already has a {kind.value}")
             option_cursor = await self.connection.execute(
@@ -338,7 +387,8 @@ class GameRepository:
     async def cancel(self, game: Game) -> None:
         async with self._lock:
             cursor = await self.connection.execute(
-                "UPDATE games SET status='cancelled', revision=revision+1 WHERE id=? AND revision=?",
+                "UPDATE games SET status='cancelled', revision=revision+1 "
+                "WHERE id=? AND revision=?",
                 (game.id, game.revision),
             )
             if cursor.rowcount != 1:
@@ -347,7 +397,9 @@ class GameRepository:
 
     async def _bump(self, game_id: int) -> None:
         await self.connection.execute(
-            "UPDATE games SET revision=revision+1, updated_at=CURRENT_TIMESTAMP WHERE id=?", (game_id,)
+            "UPDATE games SET revision=revision+1, updated_at=CURRENT_TIMESTAMP "
+            "WHERE id=?",
+            (game_id,),
         )
 
 

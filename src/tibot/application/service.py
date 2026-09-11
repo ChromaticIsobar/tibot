@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from tibot.domain.generation import SetupGenerator
-from tibot.domain.models import DraftState, Game, GameMode, GameStatus, PickKind, Player
+from tibot.domain.models import DraftState, Game, GameMode, GameStatus, PickKind
 from tibot.domain.rendering import BoardRenderer
 from tibot.infrastructure.database import GameRepository
 
@@ -67,10 +67,9 @@ class GameService:
 
     async def generate(self, game: Game, seed: int | None = None) -> Game:
         self._require_controller(game, None)
-        player_ids = [player.id for player in game.players]
-        if any(player_id is None for player_id in player_ids):
+        if any(player.id is None for player in game.players):
             raise RuntimeError("Persisted players must have IDs")
-        ids = [int(player_id) for player_id in player_ids]
+        ids = [player.id for player in game.players if player.id is not None]
         if game.mode is GameMode.MILTY:
             setup = await asyncio.to_thread(self.generator.milty, ids, seed)
             draft = DraftState(tuple(setup.order))
@@ -97,7 +96,12 @@ class GameService:
         if player_id is None:
             raise ValueError("Draft is already complete")
         self._require_controller(game, acting_user_id)
-        return await self.repository.pick(game, player_id, kind, value, acting_user_id)
+        updated = await self.repository.pick(game, player_id, kind, value, acting_user_id)
+        if updated.status is GameStatus.COMPLETE:
+            assert updated.setup is not None
+            await asyncio.to_thread(self.generator.assemble_milty, updated.setup, updated.players)
+            updated = await self.repository.finalize_setup(updated)
+        return updated
 
     async def render_result(self, game: Game) -> bytes | None:
         if game.setup is None or not game.setup.board:

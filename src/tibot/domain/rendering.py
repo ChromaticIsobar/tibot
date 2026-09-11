@@ -23,7 +23,7 @@ class BoardRenderer:
         max_x = max(x for x, _ in centers) + size // 2
         max_y = max(y for _, y in centers) + size // 2
         canvas = Image.new("RGBA", (max_x - min_x, max_y - min_y), (10, 13, 20, 255))
-        for (position, tile_id), (x, y) in zip(board.items(), centers, strict=True):
+        for (_position, tile_id), (x, y) in zip(board.items(), centers, strict=True):
             tile = self._tile(tile_id, size)
             canvas.alpha_composite(tile, (x - size // 2 - min_x, y - size // 2 - min_y))
         return self._png(canvas)
@@ -46,11 +46,21 @@ class BoardRenderer:
         layer = Image.new("RGBA", (size, size))
         layer.alpha_composite(image, ((size - image.width) // 2, (size - image.height) // 2))
         draw = ImageDraw.Draw(layer)
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont
         try:
             font = ImageFont.truetype(str(self.asset_dir / "Handel Gothic D Bold.otf"), 22)
         except OSError:
-            font = ImageFont.load_default()
-        draw.text((size // 2, size - 24), tile_id, anchor="mm", font=font, fill="white", stroke_width=2, stroke_fill="black")
+            fallback = ImageFont.load_default()
+            font = fallback
+        draw.text(
+            (size // 2, size - 24),
+            tile_id,
+            anchor="mm",
+            font=font,
+            fill="white",
+            stroke_width=2,
+            stroke_fill="black",
+        )
         return layer
 
     @staticmethod
