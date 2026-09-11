@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from tibot.domain import ContentCatalog
+from tibot.infrastructure.sql_loader import load_queries
 
 
 def main() -> None:
@@ -15,8 +16,7 @@ def main() -> None:
     if not path.exists():
         raise SystemExit("Database has not been created")
     with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
-        query = "SELECT version FROM schema_versions ORDER BY version DESC LIMIT 1"
-        connection.execute(query).fetchone()
+        connection.execute(load_queries()["healthcheck"]).fetchone()
 
 
 if __name__ == "__main__":

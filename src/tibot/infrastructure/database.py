@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from importlib import resources
 from pathlib import Path
 
 import aiosqlite
@@ -17,70 +18,9 @@ from tibot.domain.models import (
     PickKind,
     Player,
 )
+from tibot.infrastructure.sql_loader import load_queries
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS schema_versions (
-    version INTEGER PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS games (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id INTEGER NOT NULL,
-    mode TEXT NOT NULL,
-    status TEXT NOT NULL,
-    revision INTEGER NOT NULL DEFAULT 0,
-    created_by INTEGER NOT NULL,
-    seed INTEGER,
-    setup_json TEXT,
-    previous_setup_json TEXT,
-    draft_order_json TEXT,
-    draft_pick_index INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_game_per_chat
-ON games(chat_id) WHERE status IN ('roster', 'drafting');
-CREATE TABLE IF NOT EXISTS players (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-    display_name TEXT NOT NULL,
-    telegram_user_id INTEGER,
-    telegram_username TEXT,
-    faction TEXT,
-    slice_id INTEGER,
-    seat INTEGER,
-    UNIQUE(game_id, display_name COLLATE NOCASE),
-    UNIQUE(game_id, telegram_user_id)
-);
-CREATE TABLE IF NOT EXISTS generated_options (
-    game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL,
-    option_key TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    available INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY(game_id, kind, option_key)
-);
-CREATE TABLE IF NOT EXISTS draft_picks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-    player_id INTEGER NOT NULL REFERENCES players(id),
-    kind TEXT NOT NULL,
-    option_key TEXT NOT NULL,
-    picked_by INTEGER NOT NULL,
-    picked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(game_id, player_id, kind),
-    UNIQUE(game_id, kind, option_key)
-);
-CREATE TABLE IF NOT EXISTS results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-    seed INTEGER NOT NULL,
-    payload_json TEXT NOT NULL,
-    is_current INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-"""
-
+SQL = load_queries()
 
 class ConflictError(RuntimeError):
     """The requested state transition lost an optimistic concurrency race."""
@@ -96,10 +36,11 @@ class GameRepository:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = await aiosqlite.connect(self.path)
         self._connection.row_factory = aiosqlite.Row
-        await self._connection.execute("PRAGMA foreign_keys = ON")
-        await self._connection.execute("PRAGMA journal_mode = WAL")
-        await self._connection.executescript(SCHEMA)
-        await self._connection.execute("INSERT OR IGNORE INTO schema_versions(version) VALUES (1)")
+        sql_root = resources.files("tibot.infrastructure.sql")
+        configure_sql = sql_root.joinpath("configure.sql").read_text(encoding="utf-8")
+        migration_sql = sql_root.joinpath("001_initial.sql").read_text(encoding="utf-8")
+        await self._connection.executescript(configure_sql)
+        await self._connection.executescript(migration_sql)
         await self._connection.commit()
 
     async def close(self) -> None:
@@ -116,12 +57,11 @@ class GameRepository:
     async def create_game(self, chat_id: int, creator_id: int, mode: GameMode) -> Game:
         async with self._lock:
             await self.connection.execute(
-                "UPDATE games SET status='archived', revision=revision+1 "
-                "WHERE chat_id=? AND status IN ('roster','drafting')",
+                SQL["archive_active_games"],
                 (chat_id,),
             )
             cursor = await self.connection.execute(
-                "INSERT INTO games(chat_id, mode, status, created_by) VALUES (?, ?, ?, ?)",
+                SQL["create_game"],
                 (chat_id, mode.value, GameStatus.ROSTER.value, creator_id),
             )
             await self.connection.commit()
@@ -133,8 +73,7 @@ class GameRepository:
 
     async def get_active(self, chat_id: int) -> Game | None:
         cursor = await self.connection.execute(
-            "SELECT id FROM games WHERE chat_id=? AND status IN ('roster','drafting') "
-            "ORDER BY id DESC LIMIT 1",
+            SQL["get_active_game_id"],
             (chat_id,),
         )
         row = await cursor.fetchone()
@@ -142,18 +81,18 @@ class GameRepository:
 
     async def get_latest(self, chat_id: int) -> Game | None:
         cursor = await self.connection.execute(
-            "SELECT id FROM games WHERE chat_id=? ORDER BY id DESC LIMIT 1", (chat_id,)
+            SQL["get_latest_game_id"], (chat_id,)
         )
         row = await cursor.fetchone()
         return await self.get_game(int(row["id"])) if row else None
 
     async def get_game(self, game_id: int) -> Game | None:
-        cursor = await self.connection.execute("SELECT * FROM games WHERE id=?", (game_id,))
+        cursor = await self.connection.execute(SQL["get_game"], (game_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
         players_cursor = await self.connection.execute(
-            "SELECT * FROM players WHERE game_id=? ORDER BY id", (game_id,)
+            SQL["get_players"], (game_id,)
         )
         players = [_player_from_row(item) for item in await players_cursor.fetchall()]
         return Game(
@@ -177,13 +116,13 @@ class GameRepository:
     ) -> Player:
         async with self._lock:
             cursor = await self.connection.execute(
-                "SELECT status FROM games WHERE id=?", (game_id,)
+                SQL["get_game_status"], (game_id,)
             )
             row = await cursor.fetchone()
             if row is None or row["status"] != GameStatus.ROSTER.value:
                 raise ValueError("Players can only be added while building the roster")
             count_cursor = await self.connection.execute(
-                "SELECT COUNT(*) AS count FROM players WHERE game_id=?", (game_id,)
+                SQL["count_players"], (game_id,)
             )
             count_row = await count_cursor.fetchone()
             assert count_row is not None
@@ -191,9 +130,7 @@ class GameRepository:
                 raise ValueError("A game can have at most 6 players")
             try:
                 inserted = await self.connection.execute(
-                    "INSERT INTO players(game_id, display_name, telegram_user_id, "
-                    "telegram_username) "
-                    "VALUES (?, ?, ?, ?)",
+                    SQL["add_player"],
                     (game_id, display_name.strip(), telegram_user_id, telegram_username),
                 )
             except aiosqlite.IntegrityError as exc:
@@ -207,8 +144,7 @@ class GameRepository:
     async def remove_user(self, game_id: int, telegram_user_id: int) -> bool:
         async with self._lock:
             cursor = await self.connection.execute(
-                "DELETE FROM players WHERE game_id=? AND telegram_user_id=? "
-                "AND EXISTS(SELECT 1 FROM games WHERE id=? AND status='roster')",
+                SQL["remove_user"],
                 (game_id, telegram_user_id, game_id),
             )
             if cursor.rowcount:
@@ -220,9 +156,7 @@ class GameRepository:
         async with self._lock:
             try:
                 cursor = await self.connection.execute(
-                    "UPDATE players SET telegram_user_id=?, telegram_username=? "
-                    "WHERE game_id=? AND display_name=? COLLATE NOCASE "
-                    "AND telegram_user_id IS NULL",
+                    SQL["claim_player"],
                     (user_id, username, game_id, name.strip()),
                 )
             except aiosqlite.IntegrityError as exc:
@@ -243,9 +177,7 @@ class GameRepository:
             encoded = json.dumps(setup.to_dict(), separators=(",", ":"))
             order = json.dumps(draft.player_order) if draft else None
             cursor = await self.connection.execute(
-                "UPDATE games SET previous_setup_json=setup_json, setup_json=?, seed=?, status=?, "
-                "draft_order_json=?, draft_pick_index=?, revision=revision+1, "
-                "updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=?",
+                SQL["save_generation"],
                 (
                     encoded,
                     setup.seed,
@@ -260,29 +192,29 @@ class GameRepository:
                 await self.connection.rollback()
                 raise ConflictError("This setup changed; refresh and try again")
             await self.connection.execute(
-                "UPDATE results SET is_current=0 WHERE game_id=?", (game.id,)
+                SQL["retire_results"], (game.id,)
             )
             await self.connection.execute(
-                "INSERT INTO results(game_id, seed, payload_json) VALUES (?, ?, ?)",
+                SQL["add_result"],
                 (game.id, setup.seed, encoded),
             )
             await self.connection.execute(
-                "DELETE FROM generated_options WHERE game_id=?", (game.id,)
+                SQL["clear_options"], (game.id,)
             )
             if status is GameStatus.DRAFTING:
                 for faction in setup.factions:
                     await self.connection.execute(
-                        "INSERT INTO generated_options VALUES (?, 'faction', ?, ?, 1)",
+                        SQL["add_faction_option"],
                         (game.id, faction.name, json.dumps({"home_system": faction.home_system})),
                     )
                 for item in setup.slices:
                     await self.connection.execute(
-                        "INSERT INTO generated_options VALUES (?, 'slice', ?, ?, 1)",
+                        SQL["add_slice_option"],
                         (game.id, str(item.id), json.dumps({"tiles": item.tiles})),
                     )
                 for seat in range(1, len(game.players) + 1):
                     await self.connection.execute(
-                        "INSERT INTO generated_options VALUES (?, 'seat', ?, '{}', 1)",
+                        SQL["add_seat_option"],
                         (game.id, str(seat)),
                     )
             await self.connection.commit()
@@ -292,7 +224,7 @@ class GameRepository:
 
     async def get_draft(self, game_id: int) -> DraftState:
         cursor = await self.connection.execute(
-            "SELECT draft_order_json, draft_pick_index FROM games WHERE id=?", (game_id,)
+            SQL["get_draft"], (game_id,)
         )
         row = await cursor.fetchone()
         if row is None or row["draft_order_json"] is None:
@@ -305,15 +237,14 @@ class GameRepository:
         encoded = json.dumps(game.setup.to_dict(), separators=(",", ":"))
         async with self._lock:
             cursor = await self.connection.execute(
-                "UPDATE games SET setup_json=?, revision=revision+1, updated_at=CURRENT_TIMESTAMP "
-                "WHERE id=? AND revision=?",
+                SQL["finalize_setup"],
                 (encoded, game.id, game.revision),
             )
             if cursor.rowcount != 1:
                 await self.connection.rollback()
                 raise ConflictError("This setup changed; refresh and try again")
             await self.connection.execute(
-                "UPDATE results SET payload_json=? WHERE game_id=? AND is_current=1",
+                SQL["update_current_result"],
                 (encoded, game.id),
             )
             await self.connection.commit()
@@ -323,8 +254,7 @@ class GameRepository:
 
     async def available_options(self, game_id: int, kind: PickKind) -> list[str]:
         cursor = await self.connection.execute(
-            "SELECT option_key FROM generated_options WHERE game_id=? AND kind=? AND available=1 "
-            "ORDER BY option_key COLLATE NOCASE",
+            SQL["get_available_options"],
             (game_id, kind.value),
         )
         return [str(row["option_key"]) for row in await cursor.fetchall()]
@@ -346,34 +276,36 @@ class GameRepository:
                 raise ValueError("Player is not in this game")
             if player.telegram_user_id is not None and player.telegram_user_id != picked_by:
                 raise ValueError("Only that player can make this pick")
-            field = {
-                PickKind.FACTION: "faction",
-                PickKind.SLICE: "slice_id",
-                PickKind.SEAT: "seat",
+            current_value = {
+                PickKind.FACTION: player.faction,
+                PickKind.SLICE: player.slice_id,
+                PickKind.SEAT: player.seat,
             }[kind]
-            if getattr(player, field) is not None:
+            if current_value is not None:
                 raise ValueError(f"Player already has a {kind.value}")
             option_cursor = await self.connection.execute(
-                "UPDATE generated_options SET available=0 WHERE game_id=? AND kind=? "
-                "AND option_key=? AND available=1",
+                SQL["consume_option"],
                 (game.id, kind.value, option_key),
             )
             if option_cursor.rowcount != 1:
                 raise ConflictError("That option is no longer available")
             value: str | int = option_key if kind is PickKind.FACTION else int(option_key)
+            update_query = {
+                PickKind.FACTION: SQL["set_player_faction"],
+                PickKind.SLICE: SQL["set_player_slice"],
+                PickKind.SEAT: SQL["set_player_seat"],
+            }[kind]
             await self.connection.execute(
-                f"UPDATE players SET {field}=? WHERE id=?", (value, player_id)
+                update_query, (value, player_id)
             )
             await self.connection.execute(
-                "INSERT INTO draft_picks(game_id, player_id, kind, option_key, picked_by) "
-                "VALUES (?, ?, ?, ?, ?)",
+                SQL["add_draft_pick"],
                 (game.id, player_id, kind.value, option_key, picked_by),
             )
             draft.advance()
             status = GameStatus.COMPLETE if draft.complete else GameStatus.DRAFTING
             cursor = await self.connection.execute(
-                "UPDATE games SET draft_pick_index=?, status=?, revision=revision+1, "
-                "updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=?",
+                SQL["advance_draft"],
                 (draft.pick_index, status.value, game.id, game.revision),
             )
             if cursor.rowcount != 1:
@@ -387,8 +319,7 @@ class GameRepository:
     async def cancel(self, game: Game) -> None:
         async with self._lock:
             cursor = await self.connection.execute(
-                "UPDATE games SET status='cancelled', revision=revision+1 "
-                "WHERE id=? AND revision=?",
+                SQL["cancel_game"],
                 (game.id, game.revision),
             )
             if cursor.rowcount != 1:
@@ -397,8 +328,7 @@ class GameRepository:
 
     async def _bump(self, game_id: int) -> None:
         await self.connection.execute(
-            "UPDATE games SET revision=revision+1, updated_at=CURRENT_TIMESTAMP "
-            "WHERE id=?",
+            SQL["bump_game"],
             (game_id,),
         )
 
