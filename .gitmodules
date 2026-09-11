@@ -1,0 +1,4 @@
+[submodule "modules/ti4"]
+	path = modules/ti4
+	url = https://github.com/ChromaticIsobar/ti4.git
+	branch = thundersedge
