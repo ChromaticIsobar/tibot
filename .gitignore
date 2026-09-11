@@ -12,7 +12,7 @@ build/
 dist/
 data/
 .env
+.token
 *.db
 *.db-shm
 *.db-wal
-
