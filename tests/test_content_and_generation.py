@@ -148,15 +148,18 @@ def test_custom_slice_and_faction_pool_sizes(catalog: ContentCatalog) -> None:
     assert len(setup.slices) == 5
 
 
-def test_slice_board_preview_appears_after_a_slice_gets_a_seat(
+def test_slice_board_preview_appears_as_soon_as_a_player_gets_a_seat(
     catalog: ContentCatalog,
 ) -> None:
     generator = SetupGenerator(catalog)
     setup = generator.milty([1, 2, 3], seed=8)
     players = [Player(1, "One"), Player(2, "Two"), Player(3, "Three")]
     assert generator.preview_board(setup, players) is None
-    players[0].slice_id = setup.slices[0].id
     players[0].seat = 2
+    preview = generator.preview_board(setup, players)
+    assert preview is not None
+    assert sum(tile.role is BoardRole.SYSTEM for tile in preview.tiles) == 1
+    players[0].slice_id = setup.slices[0].id
     preview = generator.preview_board(setup, players)
     assert preview is not None
     assert sum(tile.role is BoardRole.SYSTEM for tile in preview.tiles) == 9
