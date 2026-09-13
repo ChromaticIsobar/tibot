@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
 from tibot.telegram.callbacks import SetupCallback
-from tibot.telegram.handlers import _pick_log_text
-from tibot.telegram.views import draft_keyboard, game_text, mode_keyboard, roster_keyboard
+from tibot.telegram.handlers import _choice_lines, _pick_log_text
+from tibot.telegram.views import (
+    draft_keyboard,
+    game_text,
+    mode_keyboard,
+    random_keyboard,
+    roster_keyboard,
+)
 
 
 def test_setup_callbacks_are_typed_and_fit_telegram_limit() -> None:
@@ -66,3 +72,15 @@ def test_current_picker_uses_linked_telegram_handle() -> None:
     placeholder = Player(2, "Offline Player")
     assert "Current pick: <b>@alice</b>" in game_text(game, linked)
     assert "Current pick: <b>Offline Player</b>" in game_text(game, placeholder)
+
+
+def test_randomizers_include_player_and_parse_nonempty_choice_lines() -> None:
+    labels = [
+        button.text for row in random_keyboard().inline_keyboard for button in row
+    ]
+    assert "Random player" in labels
+    assert _choice_lines("/choice First\n\n Second \nThird") == [
+        "First",
+        "Second",
+        "Third",
+    ]

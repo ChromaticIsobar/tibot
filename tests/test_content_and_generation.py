@@ -140,6 +140,21 @@ def test_player_count_validation(catalog: ContentCatalog) -> None:
         generator.whole_board([1, 2, 2], seed=1)
 
 
+def test_random_choice_ignores_empty_values_and_is_reproducible(
+    catalog: ContentCatalog,
+) -> None:
+    generator = SetupGenerator(catalog)
+    choices = [" Alpha ", "", "  ", "Beta"]
+    assert generator.random_choice(choices, seed=99) == generator.random_choice(
+        choices, seed=99
+    )
+    selected, seed = generator.random_choice(choices, seed=99)
+    assert selected in {"Alpha", "Beta"}
+    assert seed == 99
+    with pytest.raises(ValueError, match="non-empty"):
+        generator.random_choice(["", " "])
+
+
 def test_custom_slice_and_faction_pool_sizes(catalog: ContentCatalog) -> None:
     setup = SetupGenerator(catalog).milty(
         [1, 2, 3], seed=7, faction_count=7, slice_count=5
