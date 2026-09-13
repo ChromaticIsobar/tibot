@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
 from tibot.telegram.callbacks import SetupCallback
+from tibot.telegram.handlers import _pick_log_text
 from tibot.telegram.views import draft_keyboard, game_text, mode_keyboard, roster_keyboard
 
 
@@ -46,3 +47,14 @@ def test_active_setup_keyboards_offer_a_new_setup() -> None:
     ]
     assert "Start new setup" in roster_labels
     assert "Start new setup" in draft_labels
+
+
+def test_pick_log_distinguishes_own_and_proxy_picks() -> None:
+    linked = Player(1, "Alice", telegram_user_id=10)
+    placeholder = Player(2, "Charlie")
+    assert _pick_log_text(linked, PickKind.FACTION, "Xxcha", 10, "Alice") == (
+        "<b>Alice</b> chose faction: <b>Xxcha</b>."
+    )
+    assert _pick_log_text(placeholder, PickKind.FACTION, "Xxcha", 20, "Bob") == (
+        "<b>Charlie</b> had their faction picked by <b>Bob</b>: <b>Xxcha</b>."
+    )
