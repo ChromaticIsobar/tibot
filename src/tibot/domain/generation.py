@@ -197,6 +197,13 @@ class SetupGenerator:
         seed = seed if seed is not None else secrets.randbits(63)
         return Random(seed).choice(normalized), seed
 
+    @staticmethod
+    def random_die(sides: int, seed: int | None = None) -> tuple[int, int]:
+        if sides < 1:
+            raise ValueError("A die must have at least one side")
+        seed = seed if seed is not None else secrets.randbits(63)
+        return Random(seed).randint(1, sides), seed
+
     def _empty_layout(self, player_count: int, *, slices: bool = False) -> BoardLayout:
         spec = slice_layout_for(player_count) if slices else layout_for(player_count)
         tiles = [BoardTile(BoardPosition(0, 0), self._mecatol_id())]
