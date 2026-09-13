@@ -40,6 +40,7 @@ def create_router(service: GameService) -> Router:
             "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
             "/randomize - standalone randomizers\n"
+            "/choice - choose from non-empty lines\n"
             "/result - show the active setup",
             parse_mode="HTML",
         )
@@ -142,6 +143,20 @@ def create_router(service: GameService) -> Router:
     async def randomize_command(message: Message) -> None:
         await message.answer("Choose a randomizer:", reply_markup=random_keyboard())
 
+    @router.message(Command("choice"))
+    async def choice_command(message: Message) -> None:
+        try:
+            choice, seed = service.generator.random_choice(_choice_lines(message.text))
+            await message.answer(
+                f"Choice: <b>{html.escape(choice)}</b>\n\nSeed: <code>{seed}</code>",
+                parse_mode="HTML",
+            )
+        except ValueError as exc:
+            await message.answer(
+                f"{html.escape(str(exc))}\n\n"
+                "Put each option on its own line after /choice."
+            )
+
     @router.message(Command("result"))
     async def result_command(message: Message) -> None:
         game = await service.repository.get_latest(message.chat.id)
@@ -242,6 +257,8 @@ def create_router(service: GameService) -> Router:
                 ordered = [names[player_id] for player_id in result.order]
                 if callback_data.action == "speaker":
                     text = f"Speaker: {ordered[0]}"
+                elif callback_data.action == "player":
+                    text = f"Random player: {ordered[0]}"
                 else:
                     text = "\n".join(f"{i}. {name}" for i, name in enumerate(ordered, 1))
             await query.answer()
@@ -443,6 +460,14 @@ def _generation_arguments(arguments: str | None) -> tuple[int | None, int | None
         else:
             raise ValueError("Usage: /generate [SEED] [factions=N] [slices=N]")
     return seed, factions, slices
+
+
+def _choice_lines(text: str | None) -> list[str]:
+    if not text:
+        return []
+    first, *remaining = text.splitlines()
+    first_choice = first.partition(" ")[2].strip()
+    return [choice.strip() for choice in (first_choice, *remaining) if choice.strip()]
 
 
 async def _replace_with_mode_picker(message: Message) -> None:

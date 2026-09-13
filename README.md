@@ -96,6 +96,16 @@ case-insensitive name while the roster is open. `/claim NAME` explicitly claims 
 opens the standalone faction, order, speaker, and seating tools, while `/result` republishes the
 latest setup and board.
 
+The `/randomize` panel also selects a random player from the active roster. For arbitrary choices,
+send `/choice` followed by one option per line; empty lines are ignored:
+
+```text
+/choice
+Play this Friday
+Play this Saturday
+Postpone
+```
+
 Use the **Start new setup** button or `/setup new` to open a replacement mode chooser while a roster
 or draft is active. The current setup remains resumable until a replacement mode is selected; then
 it is archived atomically, and any older in-flight generation result is rejected as stale.
