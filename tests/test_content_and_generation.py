@@ -155,6 +155,17 @@ def test_random_choice_ignores_empty_values_and_is_reproducible(
         generator.random_choice(["", " "])
 
 
+def test_random_die_is_inclusive_seeded_and_validated(catalog: ContentCatalog) -> None:
+    generator = SetupGenerator(catalog)
+    first = generator.random_die(20, seed=123)
+    assert first == generator.random_die(20, seed=123)
+    assert 1 <= first[0] <= 20
+    assert first[1] == 123
+    assert generator.random_die(1, seed=5)[0] == 1
+    with pytest.raises(ValueError, match="at least one"):
+        generator.random_die(0)
+
+
 def test_custom_slice_and_faction_pool_sizes(catalog: ContentCatalog) -> None:
     setup = SetupGenerator(catalog).milty(
         [1, 2, 3], seed=7, faction_count=7, slice_count=5
