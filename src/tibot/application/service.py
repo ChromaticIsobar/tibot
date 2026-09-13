@@ -139,9 +139,20 @@ class GameService:
         return updated
 
     async def render_result(self, game: Game) -> bytes | None:
-        if game.setup is None or game.setup.board is None:
+        if game.setup is None:
             return None
-        return await asyncio.to_thread(self.renderer.render_board, game.setup.board)
+        board = self.generator.preview_board(game.setup, game.players)
+        if board is None:
+            return None
+        return await asyncio.to_thread(self.renderer.render_board, board)
+
+    async def render_slices(self, game: Game) -> list[tuple[int, bytes]]:
+        if game.setup is None:
+            return []
+        return [
+            (item.id, await asyncio.to_thread(self.renderer.render_slice, item.tiles))
+            for item in game.setup.slices
+        ]
 
     @staticmethod
     def _require_controller(game: Game, user_id: int | None) -> None:

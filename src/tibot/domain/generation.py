@@ -134,6 +134,43 @@ class SetupGenerator:
                 if player.seat == 1 and player.id is not None
             )
 
+    def preview_board(
+        self, setup: GeneratedSetup, players: Sequence[Player]
+    ) -> BoardLayout | None:
+        if setup.board is None and not setup.slices:
+            return None
+        if setup.board is None and not any(
+            player.seat is not None
+            and (player.faction is not None or player.slice_id is not None)
+            for player in players
+        ):
+            return None
+        count = len(players)
+        source = setup.board or self._empty_layout(count)
+        board = BoardLayout(source.geometry, source.player_count, list(source.tiles))
+        slices = {item.id: item for item in setup.slices}
+        homes = layout_for(count).homes
+        home_systems = {faction.name: faction.home_system for faction in self.catalog.factions}
+        for player in players:
+            if player.seat is None:
+                continue
+            if player.slice_id is not None and setup.slices:
+                region = layout_for(count).regions[player.seat - 1]
+                chosen = slices[player.slice_id]
+                occupied = {tile.position for tile in board.tiles}
+                board.tiles.extend(
+                    BoardTile(position, tile_id)
+                    for position, tile_id in zip(region, chosen.tiles, strict=True)
+                    if position not in occupied
+                )
+            if player.faction is not None:
+                board.replace(
+                    homes[player.seat - 1],
+                    home_systems[player.faction],
+                    BoardRole.HOME_SYSTEM,
+                )
+        return board
+
     def random_factions(self, count: int, seed: int | None = None) -> GeneratedSetup:
         if not 1 <= count <= len(self.catalog.factions):
             raise ValueError("Faction count is outside the available range")
