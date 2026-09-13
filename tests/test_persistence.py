@@ -103,6 +103,41 @@ async def test_complete_milty_draft_and_reject_stale_revision(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_undo_choice_rewinds_later_picks_and_restores_options(tmp_path: Path) -> None:
+    repository, service = await _service(tmp_path / "undo.db")
+    game = await service.begin(-250, 101, "One", "one", GameMode.MILTY)
+    game = await service.add_placeholder(game, "Two")
+    game = await service.add_placeholder(game, "Three")
+    game = await service.generate(game, seed=75)
+    picked_names: list[str] = []
+    picked_values: list[str] = []
+    for _ in range(3):
+        draft = await repository.get_draft(game.id)
+        player = next(item for item in game.players if item.id == draft.current_player_id)
+        value = (await repository.available_options(game.id, PickKind.FACTION))[0]
+        picked_names.append(player.display_name)
+        picked_values.append(value)
+        game = await service.pick(
+            game, PickKind.FACTION, value, player.telegram_user_id or 101
+        )
+
+    game, rewound = await service.undo_choice(
+        game, picked_names[1], PickKind.FACTION, 101
+    )
+    assert rewound == 2
+    draft = await repository.get_draft(game.id)
+    assert draft.pick_index == 1
+    by_name = {player.display_name: player for player in game.players}
+    assert by_name[picked_names[0]].faction == picked_values[0]
+    assert by_name[picked_names[1]].faction is None
+    assert by_name[picked_names[2]].faction is None
+    available = await repository.available_options(game.id, PickKind.FACTION)
+    assert picked_values[1] in available
+    assert picked_values[2] in available
+    await repository.close()
+
+
+@pytest.mark.asyncio
 async def test_whole_board_reroll_retains_previous_result(tmp_path: Path) -> None:
     repository, service = await _service(tmp_path / "whole.db")
     game = await service.begin(-300, 1, "One", "one", GameMode.WHOLE_BOARD)

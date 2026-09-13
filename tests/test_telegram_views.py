@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
 from tibot.telegram.callbacks import SetupCallback
-from tibot.telegram.handlers import _choice_lines, _pick_log_text
+from tibot.telegram.handlers import _choice_lines, _pick_log_text, _undo_arguments
 from tibot.telegram.views import (
     draft_keyboard,
     game_text,
@@ -84,3 +86,12 @@ def test_randomizers_include_player_and_parse_nonempty_choice_lines() -> None:
         "Second",
         "Third",
     ]
+
+
+def test_undo_arguments_support_player_names_with_spaces() -> None:
+    assert _undo_arguments("Offline Player faction") == (
+        "Offline Player",
+        PickKind.FACTION,
+    )
+    with pytest.raises(ValueError, match="faction, slice, or seat"):
+        _undo_arguments("Offline Player color")
