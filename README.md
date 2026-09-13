@@ -105,9 +105,10 @@ publish the anonymous board first, then use two passes for faction and seat choi
 Speaker randomly and publishing the finalized faction homes.
 
 Generated slice choices are published as images. During a draft, the bot publishes a refreshed
-board whenever a player's known seat can be combined with their faction or slice. Each successful
-choice also remains in the chat as a lightweight accountability log. Board scores and generator
-warnings are hidden behind Telegram spoiler formatting until opened.
+board as soon as a player claims a seat, showing their name on its home placeholder. Later faction
+and slice picks refresh that placement with the newly known content. Each successful choice also
+remains in the chat as a lightweight accountability log. Board scores and generator warnings are
+hidden behind Telegram spoiler formatting until opened.
 
 After every action, generated media and the permanent choice log are posted first. The bot then
 reposts the current recap and controls as the newest message, so the active UI stays at the bottom

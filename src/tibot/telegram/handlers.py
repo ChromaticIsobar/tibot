@@ -350,11 +350,7 @@ async def _send_pick_log(
 
 def _pick_changes_board(game: Game, player_id: int) -> bool:
     player = next(item for item in game.players if item.id == player_id)
-    if player.seat is None:
-        return False
-    if game.mode is GameMode.MILTY:
-        return player.faction is not None or player.slice_id is not None
-    return player.faction is not None
+    return player.seat is not None
 
 
 async def _run_message(  # type: ignore[no-untyped-def]

@@ -142,11 +142,7 @@ class SetupGenerator:
     ) -> BoardLayout | None:
         if setup.board is None and not setup.slices:
             return None
-        if setup.board is None and not any(
-            player.seat is not None
-            and (player.faction is not None or player.slice_id is not None)
-            for player in players
-        ):
+        if setup.board is None and not any(player.seat is not None for player in players):
             return None
         count = len(players)
         spec = slice_layout_for(count) if setup.slices else layout_for(count)
