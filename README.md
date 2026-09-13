@@ -106,6 +106,9 @@ Play this Saturday
 Postpone
 ```
 
+Use `/die N` to roll a uniformly distributed integer from 1 through `N`, inclusive. Like the other
+randomizers, the response includes its seed.
+
 Use the **Start new setup** button or `/setup new` to open a replacement mode chooser while a roster
 or draft is active. The current setup remains resumable until a replacement mode is selected; then
 it is archived atomically, and any older in-flight generation result is rejected as stale.

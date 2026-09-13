@@ -42,6 +42,7 @@ def create_router(service: GameService) -> Router:
             "/claim NAME - claim a placeholder\n"
             "/randomize - standalone randomizers\n"
             "/choice - choose from non-empty lines\n"
+            "/die N - roll a number from 1 through N\n"
             "/result - show the active setup",
             parse_mode="HTML",
         )
@@ -182,6 +183,19 @@ def create_router(service: GameService) -> Router:
                 f"{html.escape(str(exc))}\n\n"
                 "Put each option on its own line after /choice."
             )
+
+    @router.message(Command("die"))
+    async def die_command(message: Message, command: CommandObject) -> None:
+        try:
+            if not command.args or len(command.args.split()) != 1:
+                raise ValueError("Usage: /die N")
+            result, seed = service.generator.random_die(int(command.args))
+            await message.answer(
+                f"d{int(command.args)}: <b>{result}</b>\n\nSeed: <code>{seed}</code>",
+                parse_mode="HTML",
+            )
+        except ValueError as exc:
+            await message.answer(html.escape(str(exc)))
 
     @router.message(Command("result"))
     async def result_command(message: Message) -> None:

@@ -45,6 +45,7 @@ async def run() -> None:
             BotCommand(command="claim", description="Claim a placeholder seat"),
             BotCommand(command="randomize", description="Open standalone randomizers"),
             BotCommand(command="choice", description="Choose from newline-separated options"),
+            BotCommand(command="die", description="Roll a number from 1 through N"),
             BotCommand(command="result", description="Show the active setup"),
             BotCommand(command="help", description="Show help"),
         ]
