@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import io
+import math
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageFont
 
 from tibot.domain import ContentCatalog, ContentError, SetupGenerator
 from tibot.domain.layouts import layout_for, slice_layout_for, slice_preview_positions
@@ -181,3 +182,18 @@ def test_renderer_produces_tightly_cropped_native_png(
     assert 1_800 <= image.width <= 2_100
     assert 1_850 <= image.height <= 2_300
     assert len(data) > 100_000
+
+
+def test_home_name_uses_default_font_or_shrinks_to_fit(catalog: ContentCatalog) -> None:
+    renderer = BoardRenderer(catalog.tile_image_dir)
+    short = renderer._fitted_font("Ada", 59, 295)
+    long = renderer._fitted_font("A very long placeholder player name", 59, 295)
+    assert isinstance(short, ImageFont.FreeTypeFont)
+    assert isinstance(long, ImageFont.FreeTypeFont)
+    assert short.size == 59
+    assert long.size < short.size
+    left, _, right, _ = long.getbbox(
+        "A very long placeholder player name",
+        stroke_width=max(2, math.ceil(long.size * 0.1)),
+    )
+    assert right - left <= 295
