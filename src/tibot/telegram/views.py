@@ -12,7 +12,7 @@ from tibot.telegram.callbacks import RandomCallback, SetupCallback
 def mode_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(
-        text="Milty draft",
+        text="Slices",
         callback_data=SetupCallback(game_id=0, revision=0, action="new", value="milty"),
     )
     builder.button(
@@ -24,7 +24,7 @@ def mode_keyboard() -> InlineKeyboardMarkup:
 
 
 def game_text(game: Game, draft_player: Player | None = None) -> str:
-    title = "Milty draft" if game.mode is GameMode.MILTY else "Whole board"
+    title = "Slices" if game.mode is GameMode.MILTY else "Whole board"
     lines = [f"<b>{title}</b>", f"Status: {game.status.value.replace('_', ' ').title()}", ""]
     lines.append(f"Players ({len(game.players)}/6):")
     for index, player in enumerate(game.players, start=1):
@@ -45,39 +45,53 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
         lines.extend(("", f"Current pick: <b>{draft_player.display_name}</b>"))
     if game.setup is not None:
         lines.extend(("", f"Seed: <code>{game.setup.seed}</code>"))
-        if game.status is GameStatus.DRAFTING:
+        names = {player.id: player.display_name for player in game.players}
+        if game.setup.order:
+            lines.extend(("", "Draft order:"))
+            lines.extend(
+                f"{index}. {names[player_id]}"
+                for index, player_id in enumerate(game.setup.order, start=1)
+            )
+        if game.status is GameStatus.DRAFTING and game.setup.slices:
             lines.append("")
             lines.extend(
                 f"Slice {item.id}: {', '.join(item.tiles)} "
                 f"({item.resources} resources / {item.influence} influence)"
                 for item in game.setup.slices
             )
-        if game.mode is GameMode.WHOLE_BOARD:
-            names = {player.id: player.display_name for player in game.players}
+        if game.mode is GameMode.WHOLE_BOARD and game.setup.factions:
             lines.extend(("", "Faction pool:"))
             lines.extend(f"- {faction.name}" for faction in game.setup.factions)
-            lines.extend(("", "Seating order:"))
-            lines.extend(
-                f"{index}. {names[player_id]}" + (" (Speaker)" if index == 1 else "")
-                for index, player_id in enumerate(game.setup.order, start=1)
-            )
+        if game.setup.speaker_player_id is not None:
+            lines.extend(("", f"Speaker: <b>{names[game.setup.speaker_player_id]}</b>"))
+            if game.setup.speaker_seed is not None:
+                lines.append(f"Speaker seed: <code>{game.setup.speaker_seed}</code>")
         if game.setup.score is not None:
             lines.append(f"Board score: {game.setup.score}")
         lines.extend(f"Warning: {warning}" for warning in game.setup.warnings)
     return "\n".join(lines)
 
 
-def roster_keyboard(game: Game) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+def roster_keyboard(game: Game, advanced: bool = False) -> InlineKeyboardMarkup:
+    rows = [
             [
                 _button(game, "Join", "join"),
                 _button(game, "Leave", "leave"),
             ],
             [_button(game, "Generate setup", "generate")],
-            [_button(game, "Cancel", "cancel")],
         ]
-    )
+    if game.mode is GameMode.WHOLE_BOARD:
+        rows.append([_button(game, "Board only (Twilight's Fall)", "board_only")])
+    rows.append([_button(game, "Advanced commands", "advanced")])
+    if advanced:
+        rows.extend(
+            [
+                [_button(game, "Manual player", "help_add")],
+                [_button(game, "Seed and pool sizes", "help_generate")],
+            ]
+        )
+    rows.append([_button(game, "Cancel", "cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def draft_keyboard(
@@ -94,7 +108,9 @@ def draft_keyboard(
             builder.button(text=f"Slice {value}", callback_data=_callback(game, "slice", value))
     if player.seat is None:
         for value in options[PickKind.SEAT]:
-            label = f"Seat {value}" + (" (Speaker)" if value == "1" else "")
+            label = f"Seat {value}"
+            if game.mode is GameMode.MILTY and value == "1":
+                label += " (Speaker)"
             builder.button(text=label, callback_data=_callback(game, "seat", value))
     builder.adjust(1)
     return builder.as_markup()

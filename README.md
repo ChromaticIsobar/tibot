@@ -2,38 +2,108 @@
 
 Telegram-native preparation tools for 3-6 player Twilight Imperium games.
 
-Development uses Python 3.12 and [uv](https://docs.astral.sh/uv/):
+Development uses Python 3.12 and [uv](https://docs.astral.sh/uv/).
 
-```console
-git clone --recurse-submodules <repository-url>
-uv sync
-uv run tibot
-```
-
-Set `BOT_TOKEN` before starting the bot. Runtime data defaults to `data/tibot.db` and can be
-relocated with `DATABASE_PATH`; logging is configured with `LOG_LEVEL`.
-
-## Usage
-
-Run locally:
+## Initial setup
 
 ```bash
-export BOT_TOKEN="123:telegram-token"
+git clone --recurse-submodules <repository-url>
+cd TIBot
+uv sync
+```
+
+If the repository was cloned without its submodule, initialize it separately:
+
+```bash
+git submodule update --init --recursive
+```
+
+Set `BOT_TOKEN` before starting the bot. Runtime data defaults to `data/tibot.db`; override it with
+`DATABASE_PATH`. Set `LOG_LEVEL` to `DEBUG`, `INFO`, `WARNING`, or `ERROR`.
+
+## Local development
+
+Load a token stored in `.token` and run the bot:
+
+```bash
+export BOT_TOKEN="$(tr -d '\r\n' < .token)"
 uv run tibot
 ```
 
-Or run the long-polling service in Docker:
+Run the quality checks:
 
-```console
-git submodule update --init --recursive
+```bash
+uv run pytest
+uv run ruff check .
+uv run mypy src tests
+uv lock --check
+```
+
+## Docker
+
+Build and start in the foreground:
+
+```bash
+export BOT_TOKEN="$(tr -d '\r\n' < .token)"
+docker compose up --build
+```
+
+Start detached instead:
+
+```bash
 docker compose up --build -d
 ```
+
+After detaching, follow output with `docker compose logs -f`. Press `Ctrl-C` to leave the logs
+without stopping the container. After changing code, rebuild and recreate the service:
+
+```bash
+docker compose up --build -d
+docker compose logs -f
+```
+
+Other useful operations:
+
+```bash
+docker compose ps                 # show service status
+docker compose restart tibot      # restart without rebuilding
+docker compose stop               # stop but keep container and database
+docker compose start              # restart stopped containers
+docker compose down               # remove containers, keep database volume
+docker compose build --no-cache   # force a clean image rebuild
+```
+
+The SQLite database is stored in the `tibot-data` Docker volume. To permanently delete every saved
+game and recreate a clean database:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+```
+
+This is destructive. For a local non-Docker run, stop the bot and delete the configured file:
+
+```bash
+rm -f data/tibot.db data/tibot.db-shm data/tibot.db-wal
+```
+
+## Telegram usage
 
 In a Telegram group, `/setup` opens the persistent setup wizard. Players join through its inline
 buttons; `/addplayer NAME` creates an offline seat and `/addplayer @handle` creates a seat that the
 matching user can claim by joining. `/claim NAME` explicitly claims a placeholder. `/randomize`
 opens the standalone faction, order, speaker, and seating tools, while `/result` republishes the
 latest setup and board.
+
+Every setup begins with a randomized snake-draft order. Slice drafts use three passes in which
+players choose a faction, slice, and seat in any order; seat 1 becomes Speaker. Whole-board drafts
+publish the anonymous board first, then use two passes for faction and seat choices before choosing
+Speaker randomly and publishing the finalized faction homes.
+
+The roster screen's **Advanced commands** panel links to manual player and generation controls.
+Use `/generate [SEED] [factions=N] [slices=N]` to reproduce a seed or override pool sizes. `slices=N`
+only applies to slice drafts. In whole-board mode, `/board [SEED]` or the **Board only (Twilight's
+Fall)** button completes after publishing the anonymous board, with no faction or seating draft.
 
 ## Content and assets
 

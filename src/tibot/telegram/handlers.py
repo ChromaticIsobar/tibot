@@ -34,6 +34,8 @@ def create_router(service: GameService) -> Router:
             "<b>TIBot</b> prepares 3-6 player Twilight Imperium games.\n\n"
             "/setup - create or resume a setup\n"
             "/addplayer NAME - add a handle or placeholder\n"
+            "/generate [SEED] [factions=N] [slices=N] - generate with overrides\n"
+            "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
             "/randomize - standalone randomizers\n"
             "/result - show the active setup",
@@ -86,6 +88,32 @@ def create_router(service: GameService) -> Router:
         except ValueError as exc:
             await message.answer(html.escape(str(exc)))
 
+    @router.message(Command("generate"))
+    async def generate_command(message: Message, command: CommandObject) -> None:
+        game = await _controlled_roster(message, service)
+        if game is None:
+            return
+        try:
+            seed, factions, slices = _generation_arguments(command.args)
+            await _run_message(
+                message,
+                service.generate(game, seed, factions, slices),
+                service,
+            )
+        except ValueError as exc:
+            await message.answer(html.escape(str(exc)))
+
+    @router.message(Command("board"))
+    async def board_command(message: Message, command: CommandObject) -> None:
+        game = await _controlled_roster(message, service)
+        if game is None:
+            return
+        try:
+            seed = int(command.args) if command.args else None
+            await _run_message(message, service.generate_board_only(game, seed), service)
+        except ValueError as exc:
+            await message.answer(html.escape(str(exc)))
+
     @router.message(Command("randomize"))
     async def randomize_command(message: Message) -> None:
         await message.answer("Choose a randomizer:", reply_markup=random_keyboard())
@@ -118,9 +146,26 @@ def create_router(service: GameService) -> Router:
                 game = loaded_game
                 if game.revision != callback_data.revision:
                     raise ConflictError("This screen is stale; use /setup to refresh")
+                if callback_data.action == "advanced":
+                    await query.answer()
+                    await _edit_game(query, game, service, advanced=True)
+                    return
+                if callback_data.action == "help_add":
+                    await query.answer(
+                        "Send /addplayer NAME or /addplayer @handle",
+                        show_alert=True,
+                    )
+                    return
+                if callback_data.action == "help_generate":
+                    await query.answer(
+                        "Send /generate [SEED] [factions=N] [slices=N], or /board [SEED]",
+                        show_alert=True,
+                    )
+                    return
                 game = await _apply_setup_action(query, callback_data, game, service)
             await query.answer()
-            await _edit_game(query, game, service)
+            publish_board = callback_data.action in {"generate", "reroll"}
+            await _edit_game(query, game, service, publish_board=publish_board)
         except (ValueError, ConflictError) as exc:
             await query.answer(str(exc), show_alert=True)
         except Exception:
@@ -171,6 +216,8 @@ async def _apply_setup_action(
         raise ValueError("Join the setup before controlling it")
     if data.action == "generate":
         return await service.generate(game)
+    if data.action == "board_only":
+        return await service.generate_board_only(game)
     if data.action == "reroll":
         return await service.reroll(game)
     if data.action == "cancel":
@@ -192,20 +239,29 @@ async def _send_game(message: Message, game: Game, service: GameService) -> None
     await _send_board(message, game, service)
 
 
-async def _edit_game(query: CallbackQuery, game: Game, service: GameService) -> None:
+async def _edit_game(
+    query: CallbackQuery,
+    game: Game,
+    service: GameService,
+    *,
+    publish_board: bool = False,
+    advanced: bool = False,
+) -> None:
     if not isinstance(query.message, Message):
         return
-    draft_player, markup = await _screen(game, service)
+    draft_player, markup = await _screen(game, service, advanced=advanced)
     await query.message.edit_text(
         game_text(game, draft_player), parse_mode="HTML", reply_markup=markup
     )
-    if game.status is GameStatus.COMPLETE:
+    if publish_board or game.status is GameStatus.COMPLETE:
         await _send_board(query.message, game, service)
 
 
-async def _screen(game: Game, service: GameService):  # type: ignore[no-untyped-def]
+async def _screen(  # type: ignore[no-untyped-def]
+    game: Game, service: GameService, *, advanced: bool = False
+):
     if game.status is GameStatus.ROSTER:
-        return None, roster_keyboard(game)
+        return None, roster_keyboard(game, advanced)
     if game.status is GameStatus.DRAFTING:
         draft = await service.repository.get_draft(game.id)
         player = next(item for item in game.players if item.id == draft.current_player_id)
@@ -241,3 +297,29 @@ def _message_user(message: Message):  # type: ignore[no-untyped-def]
     if message.from_user is None:
         raise ValueError("This command requires a Telegram user")
     return message.from_user
+
+
+async def _controlled_roster(message: Message, service: GameService) -> Game | None:
+    game = await service.repository.get_active(message.chat.id)
+    if game is None or game.status is not GameStatus.ROSTER:
+        await message.answer("Start or resume a roster first with /setup.")
+        return None
+    user = _message_user(message)
+    if not _joined(game, user.id):
+        await message.answer("Join the setup before controlling it.")
+        return None
+    return game
+
+
+def _generation_arguments(arguments: str | None) -> tuple[int | None, int | None, int | None]:
+    seed = factions = slices = None
+    for argument in (arguments or "").split():
+        if argument.startswith("factions="):
+            factions = int(argument.removeprefix("factions="))
+        elif argument.startswith("slices="):
+            slices = int(argument.removeprefix("slices="))
+        elif seed is None:
+            seed = int(argument)
+        else:
+            raise ValueError("Usage: /generate [SEED] [factions=N] [slices=N]")
+    return seed, factions, slices

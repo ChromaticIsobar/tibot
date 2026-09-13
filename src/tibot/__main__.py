@@ -38,6 +38,8 @@ async def run() -> None:
         [
             BotCommand(command="setup", description="Create or resume a game setup"),
             BotCommand(command="addplayer", description="Add a handle or placeholder"),
+            BotCommand(command="generate", description="Generate with seed or pool overrides"),
+            BotCommand(command="board", description="Generate only a whole board"),
             BotCommand(command="claim", description="Claim a placeholder seat"),
             BotCommand(command="randomize", description="Open standalone randomizers"),
             BotCommand(command="result", description="Show the active setup"),
