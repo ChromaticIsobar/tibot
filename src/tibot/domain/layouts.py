@@ -25,6 +25,20 @@ def layout_for(player_count: int) -> LayoutSpec:
         raise ValueError("A board requires 3 to 6 players") from exc
 
 
+def slice_layout_for(player_count: int) -> LayoutSpec:
+    try:
+        return _SLICE_LAYOUTS[player_count]
+    except KeyError as exc:
+        raise ValueError("A board requires 3 to 6 players") from exc
+
+
+def slice_preview_positions(player_count: int) -> tuple[BoardPosition, ...]:
+    try:
+        return _SLICE_PREVIEWS[player_count]
+    except KeyError as exc:
+        raise ValueError("A slice requires 3 to 6 players") from exc
+
+
 def offset_position(center: BoardPosition, offset: tuple[int, int]) -> BoardPosition:
     radius = center.radius + offset[0]
     angle = ((center.angle * radius) // center.radius + offset[1]) % (radius * 6)
@@ -159,5 +173,98 @@ _LAYOUTS = {
         _HOMES_6,
         _SYSTEMS_6,
         regions=_nearest_regions(_HOMES_6, _SYSTEMS_6),
+    ),
+}
+
+_SLICE_HOMES_4 = tuple(BoardPosition(3, angle) for angle in (11, 16, 2, 7))
+_OFFSETS_3 = (
+    (0, 1),
+    (-1, 1),
+    (-2, 0),
+    (-1, -1),
+    (0, -1),
+    (-1, 0),
+    (-2, -1),
+    (-1, 2),
+)
+_OFFSETS_4_EVEN = (
+    (0, 1),
+    (-1, 1),
+    (-1, 0),
+    (0, -1),
+    (-1, 2),
+    (-2, 1),
+    (-2, 0),
+    (0, -2),
+)
+_OFFSETS_4_ODD = (
+    (0, 1),
+    (-1, 1),
+    (-1, 0),
+    (0, -1),
+    (0, 2),
+    (-1, 2),
+    (-2, 1),
+    (0, -2),
+)
+_OFFSETS_6 = ((0, 1), (-1, 1), (-2, 0), (-1, 0), (0, -1))
+
+
+def _regions_from_offsets(
+    homes: tuple[BoardPosition, ...],
+    offsets: tuple[tuple[tuple[int, int], ...], ...],
+) -> tuple[tuple[BoardPosition, ...], ...]:
+    return tuple(
+        tuple(offset_position(home, offset) for offset in shape)
+        for home, shape in zip(homes, offsets, strict=True)
+    )
+
+
+_SLICE_REGIONS_3 = _regions_from_offsets(_HOMES_3, (_OFFSETS_3,) * 3)
+_SLICE_REGIONS_4 = _regions_from_offsets(
+    _SLICE_HOMES_4,
+    (_OFFSETS_4_ODD, _OFFSETS_4_EVEN, _OFFSETS_4_ODD, _OFFSETS_4_EVEN),
+)
+_SLICE_REGIONS_6 = _regions_from_offsets(_HOMES_6, (_OFFSETS_6,) * 6)
+
+_SLICE_LAYOUTS = {
+    3: LayoutSpec(
+        BoardGeometry.TRIANGLE_3,
+        _HOMES_3,
+        tuple(position for region in _SLICE_REGIONS_3 for position in region),
+        _GAPS_3,
+        regions=_SLICE_REGIONS_3,
+    ),
+    4: LayoutSpec(
+        BoardGeometry.RECTANGLE_4,
+        _SLICE_HOMES_4,
+        tuple(position for region in _SLICE_REGIONS_4 for position in region),
+        regions=_SLICE_REGIONS_4,
+    ),
+    5: _LAYOUTS[5],
+    6: LayoutSpec(
+        BoardGeometry.HEXAGON_6,
+        _HOMES_6,
+        tuple(position for region in _SLICE_REGIONS_6 for position in region),
+        regions=_SLICE_REGIONS_6,
+    ),
+}
+
+_SLICE_PREVIEWS = {
+    3: tuple(
+        BoardPosition(*position)
+        for position in ((1, 3), (1, 4), (1, 5), (1, 0), (1, 1), (1, 2), (0, 0), (2, 1), (2, 10))
+    ),
+    4: tuple(
+        BoardPosition(*position)
+        for position in ((0, 0), (1, 4), (1, 5), (1, 0), (1, 1), (2, 9), (2, 10), (2, 11), (2, 1))
+    ),
+    5: tuple(
+        BoardPosition(*position)
+        for position in ((1, 3), (1, 4), (0, 0), (1, 2), (1, 0), (1, 5))
+    ),
+    6: tuple(
+        BoardPosition(*position)
+        for position in ((1, 3), (1, 4), (1, 5), (1, 0), (0, 0), (1, 2))
     ),
 }

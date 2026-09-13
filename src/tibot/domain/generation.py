@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from random import Random
 
 from tibot.domain.content import ContentCatalog
-from tibot.domain.layouts import adjacent, layout_for
+from tibot.domain.layouts import adjacent, layout_for, slice_layout_for
 from tibot.domain.models import (
     BoardLayout,
     BoardPosition,
@@ -110,14 +110,17 @@ class SetupGenerator:
         if setup.board is None:
             if any(player.slice_id is None for player in players):
                 raise ValueError("Every player needs a slice")
-            setup.board = self._empty_layout(count)
+            spec = slice_layout_for(count)
+            setup.board = self._empty_layout(count, slices=True)
             slices = {item.id: item for item in setup.slices}
             for player in players:
-                region = layout_for(count).regions[int(player.seat or 0) - 1]
+                region = spec.regions[int(player.seat or 0) - 1]
                 chosen = slices[int(player.slice_id or 0)]
                 for position, tile_id in zip(region, chosen.tiles, strict=True):
                     setup.board.tiles.append(BoardTile(position, tile_id))
-        homes = layout_for(count).homes
+        homes = (
+            slice_layout_for(count).homes if setup.slices else layout_for(count).homes
+        )
         home_systems = {faction.name: faction.home_system for faction in self.catalog.factions}
         for player in players:
             home = homes[int(player.seat or 0) - 1]
@@ -146,16 +149,17 @@ class SetupGenerator:
         ):
             return None
         count = len(players)
-        source = setup.board or self._empty_layout(count)
+        spec = slice_layout_for(count) if setup.slices else layout_for(count)
+        source = setup.board or self._empty_layout(count, slices=True)
         board = BoardLayout(source.geometry, source.player_count, list(source.tiles))
         slices = {item.id: item for item in setup.slices}
-        homes = layout_for(count).homes
+        homes = spec.homes
         home_systems = {faction.name: faction.home_system for faction in self.catalog.factions}
         for player in players:
             if player.seat is None:
                 continue
             if player.slice_id is not None and setup.slices:
-                region = layout_for(count).regions[player.seat - 1]
+                region = spec.regions[player.seat - 1]
                 chosen = slices[player.slice_id]
                 occupied = {tile.position for tile in board.tiles}
                 board.tiles.extend(
@@ -189,8 +193,8 @@ class SetupGenerator:
         Random(seed).shuffle(order)
         return GeneratedSetup(seed=seed, order=order)
 
-    def _empty_layout(self, player_count: int) -> BoardLayout:
-        spec = layout_for(player_count)
+    def _empty_layout(self, player_count: int, *, slices: bool = False) -> BoardLayout:
+        spec = slice_layout_for(player_count) if slices else layout_for(player_count)
         tiles = [BoardTile(BoardPosition(0, 0), self._mecatol_id())]
         tiles.extend(
             BoardTile(position, None, BoardRole.HOME_PLACEHOLDER)

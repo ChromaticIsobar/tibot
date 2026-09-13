@@ -150,7 +150,12 @@ class GameService:
         if game.setup is None:
             return []
         return [
-            (item.id, await asyncio.to_thread(self.renderer.render_slice, item.tiles))
+            (
+                item.id,
+                await asyncio.to_thread(
+                    self.renderer.render_slice, item.tiles, len(game.players)
+                ),
+            )
             for item in game.setup.slices
         ]
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from tibot.domain.layouts import layout_for, path_from_center
+from tibot.domain.layouts import layout_for, path_from_center, slice_preview_positions
 from tibot.domain.models import BoardLayout, BoardPosition, BoardRole, BoardTile
 
 _SQRT_3 = math.sqrt(3)
@@ -61,17 +61,33 @@ class BoardRenderer:
             )
         return self._png(canvas)
 
-    def render_slice(self, tile_ids: tuple[str, ...]) -> bytes:
+    def render_slice(self, tile_ids: tuple[str, ...], player_count: int) -> bytes:
         edge = 150
-        width, height = round(2 * edge), round(_SQRT_3 * edge)
-        columns = 3
-        rows = math.ceil(len(tile_ids) / columns)
-        canvas = Image.new("RGBA", (columns * width, rows * height), (10, 13, 20, 255))
-        for index, tile_id in enumerate(tile_ids):
-            tile = BoardTile(BoardPosition(0, 0), tile_id)
+        positions = slice_preview_positions(player_count)
+        if len(positions) != len(tile_ids) + 1:
+            raise ValueError("Slice tile count does not match its geometry")
+        tiles = [BoardTile(positions[0], None, BoardRole.HOME_PLACEHOLDER)]
+        tiles.extend(
+            BoardTile(position, tile_id)
+            for position, tile_id in zip(positions[1:], tile_ids, strict=True)
+        )
+        width, height = round(2 * edge * 1.003 + 2), round(_SQRT_3 * edge * 1.003 + 2)
+        centers = {tile.position: self._center(tile.position, edge) for tile in tiles}
+        min_x = min(x for x, _ in centers.values()) - width // 2
+        max_x = max(x for x, _ in centers.values()) + width // 2
+        min_y = min(y for _, y in centers.values()) - height // 2
+        max_y = max(y for _, y in centers.values()) + height // 2
+        margin = 20
+        canvas = Image.new(
+            "RGBA",
+            (max_x - min_x + 2 * margin, max_y - min_y + 2 * margin),
+            (10, 13, 20, 255),
+        )
+        for tile in tiles:
             image, caption = self._tile_image(tile, (), (width, height))
-            left = index % columns * width
-            top = index // columns * height
+            x, y = centers[tile.position]
+            left = x - width // 2 - min_x + margin
+            top = y - height // 2 - min_y + margin
             canvas.alpha_composite(image, (left, top))
             self._caption(
                 canvas,
@@ -89,8 +105,11 @@ class BoardRenderer:
     ) -> tuple[Image.Image, str]:
         if tile.role is BoardRole.HOME_PLACEHOLDER:
             path = self.tile_dir / "ST_0.png"
-            seat = homes.index(tile.position) + 1
-            caption = f"SEAT {seat}"
+            caption = (
+                f"SEAT {homes.index(tile.position) + 1}"
+                if tile.position in homes
+                else "HOME"
+            )
         else:
             path = self.tile_dir / f"ST_{tile.tile_id}.png"
             caption = str(tile.tile_id or "")
