@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from tibot.domain import ContentCatalog, ContentError, SetupGenerator
-from tibot.domain.layouts import layout_for
+from tibot.domain.layouts import layout_for, slice_layout_for, slice_preview_positions
 from tibot.domain.models import BoardGeometry, BoardPosition, BoardRole, Player
 from tibot.domain.rendering import BoardRenderer
 
@@ -69,6 +69,22 @@ def test_three_player_geometry_is_the_original_sparse_triangle() -> None:
         BoardPosition(3, angle) for angle in (17, 0, 1, 5, 6, 7, 11, 12, 13)
     }
     assert all(len(region) == 8 for region in spec.regions)
+
+
+@pytest.mark.parametrize(("player_count", "size"), ((3, 8), (4, 8), (5, 5), (6, 5)))
+def test_slice_layouts_use_original_geometry(player_count: int, size: int) -> None:
+    spec = slice_layout_for(player_count)
+    assert len(spec.homes) == player_count
+    assert all(len(region) == size for region in spec.regions)
+    assert len(slice_preview_positions(player_count)) == size + 1
+    positions = [position for region in spec.regions for position in region]
+    assert len(positions) == len(set(positions))
+
+
+def test_four_player_slice_geometry_has_its_own_home_coordinates() -> None:
+    assert slice_layout_for(4).homes == tuple(
+        BoardPosition(3, angle) for angle in (11, 16, 2, 7)
+    )
 
 
 def test_five_player_hyperlanes_match_the_original_layout() -> None:
