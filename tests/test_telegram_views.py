@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tibot.domain.models import Game, GameMode, GameStatus, Player
+from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, Player
 from tibot.telegram.callbacks import SetupCallback
-from tibot.telegram.views import mode_keyboard, roster_keyboard
+from tibot.telegram.views import game_text, mode_keyboard, roster_keyboard
 
 
 def test_setup_callbacks_are_typed_and_fit_telegram_limit() -> None:
@@ -21,3 +21,10 @@ def test_setup_callbacks_are_typed_and_fit_telegram_limit() -> None:
 def test_mode_keyboard_offers_both_workflows() -> None:
     labels = [button.text for row in mode_keyboard().inline_keyboard for button in row]
     assert labels == ["Slices", "Whole board"]
+
+
+def test_score_and_warnings_are_hidden_as_spoilers() -> None:
+    game = Game(1, -1, GameMode.WHOLE_BOARD, GameStatus.COMPLETE, 1, 1)
+    game.setup = GeneratedSetup(seed=2, score=4.5, warnings=["check this"])
+    text = game_text(game)
+    assert "<tg-spoiler>Board score: 4.5\nWarning: check this</tg-spoiler>" in text
