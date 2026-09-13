@@ -11,11 +11,13 @@ def test_setup_callbacks_are_typed_and_fit_telegram_limit() -> None:
     callbacks = [button.callback_data for row in markup.inline_keyboard for button in row]
     assert callbacks
     assert all(callback is not None and len(callback.encode()) <= 64 for callback in callbacks)
-    parsed = SetupCallback.unpack(callbacks[0])
+    first = callbacks[0]
+    assert first is not None
+    parsed = SetupCallback.unpack(first)
     assert parsed.game_id == 123
     assert parsed.revision == 7
 
 
 def test_mode_keyboard_offers_both_workflows() -> None:
     labels = [button.text for row in mode_keyboard().inline_keyboard for button in row]
-    assert labels == ["Milty draft", "Whole board"]
+    assert labels == ["Slices", "Whole board"]
