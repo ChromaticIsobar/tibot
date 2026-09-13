@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from tibot.domain.generation import SetupGenerator
+from tibot.domain.layouts import layout_for, slice_layout_for
 from tibot.domain.models import DraftState, Game, GameMode, GameStatus, PickKind
 from tibot.domain.rendering import BoardRenderer
 from tibot.infrastructure.database import GameRepository
@@ -144,7 +145,19 @@ class GameService:
         board = self.generator.preview_board(game.setup, game.players)
         if board is None:
             return None
-        return await asyncio.to_thread(self.renderer.render_board, board)
+        spec = (
+            slice_layout_for(len(game.players))
+            if game.setup.slices
+            else layout_for(len(game.players))
+        )
+        home_labels = {
+            spec.homes[player.seat - 1]: player.display_name
+            for player in game.players
+            if player.seat is not None and player.faction is None
+        }
+        return await asyncio.to_thread(
+            self.renderer.render_board, board, home_labels
+        )
 
     async def render_slices(self, game: Game) -> list[tuple[int, bytes]]:
         if game.setup is None:

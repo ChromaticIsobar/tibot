@@ -28,7 +28,13 @@ class BoardRenderer:
         self.tile_dir = tile_dir
         self.asset_dir = asset_dir or Path(__file__).resolve().parents[1] / "assets"
 
-    def render_board(self, board: BoardLayout, edge: int = 180, margin: int = 24) -> bytes:
+    def render_board(
+        self,
+        board: BoardLayout,
+        home_labels: dict[BoardPosition, str] | None = None,
+        edge: int = 180,
+        margin: int = 24,
+    ) -> bytes:
         visible = [tile for tile in board.tiles if tile.role is not BoardRole.GAP]
         if not visible:
             raise ValueError("Board has no visible tiles")
@@ -48,6 +54,8 @@ class BoardRenderer:
         for tile in visible:
             x, y = centers[tile.position]
             image, caption = self._tile_image(tile, homes, (tile_width, tile_height))
+            if tile.role is BoardRole.HOME_PLACEHOLDER and home_labels:
+                caption = home_labels.get(tile.position, caption)
             if tile.rotation:
                 image = image.rotate(tile.rotation, expand=False)
             left = x - tile_width // 2 - min_x + margin
@@ -58,6 +66,7 @@ class BoardRenderer:
                 (left + tile_width // 2, top + tile_height // 2),
                 caption,
                 round(edge * 0.33),
+                round(tile_width * 0.82),
             )
         return self._png(canvas)
 
@@ -94,6 +103,7 @@ class BoardRenderer:
                 (left + width // 2, top + height // 2),
                 caption,
                 round(edge * 0.33),
+                round(width * 0.82),
             )
         return self._png(canvas)
 
@@ -123,16 +133,11 @@ class BoardRenderer:
         position: tuple[int, int],
         caption: str,
         font_size: int,
+        max_width: int,
     ) -> None:
         overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
-        font: ImageFont.FreeTypeFont | ImageFont.ImageFont
-        try:
-            font = ImageFont.truetype(
-                str(self.asset_dir / "Handel Gothic D Bold.otf"), font_size
-            )
-        except OSError:
-            font = ImageFont.load_default()
+        font = self._fitted_font(caption, font_size, max_width)
         draw.text(
             position,
             caption,
@@ -143,6 +148,20 @@ class BoardRenderer:
             stroke_fill=(0, 0, 0, _CAPTION_OPACITY),
         )
         image.alpha_composite(overlay)
+
+    def _fitted_font(
+        self, caption: str, default_size: int, max_width: int
+    ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        path = str(self.asset_dir / "Handel Gothic D Bold.otf")
+        for size in range(default_size, 11, -1):
+            try:
+                font = ImageFont.truetype(path, size)
+            except OSError:
+                return ImageFont.load_default()
+            left, _, right, _ = font.getbbox(caption, stroke_width=max(2, math.ceil(size * 0.1)))
+            if right - left <= max_width:
+                return font
+        return ImageFont.truetype(path, 12)
 
     @staticmethod
     def _center(position: BoardPosition, edge: int) -> tuple[int, int]:
