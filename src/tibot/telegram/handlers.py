@@ -11,7 +11,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from tibot.application.service import GameService
-from tibot.domain.models import Game, GameMode, GameStatus, PickKind
+from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
 from tibot.infrastructure.database import ConflictError
 from tibot.telegram.callbacks import RandomCallback, SetupCallback
 from tibot.telegram.views import (
@@ -194,7 +194,13 @@ def create_router(service: GameService) -> Router:
             if picked_player_id is not None and isinstance(query.message, Message):
                 kind = PickKind(callback_data.action)
                 await _send_pick_log(
-                    query.message, game, picked_player_id, kind, callback_data.value
+                    query.message,
+                    game,
+                    picked_player_id,
+                    kind,
+                    callback_data.value,
+                    query.from_user.id,
+                    query.from_user.full_name,
                 )
                 publish_board = _pick_changes_board(game, picked_player_id)
             await _edit_game(query, game, service, publish_board=publish_board)
@@ -338,13 +344,31 @@ async def _send_pick_log(
     player_id: int,
     kind: PickKind,
     value: str,
+    actor_id: int,
+    actor_name: str,
 ) -> None:
     player = next(item for item in game.players if item.id == player_id)
-    choice = f"Slice {value}" if kind is PickKind.SLICE else value
     await message.answer(
-        f"<b>{html.escape(player.display_name)}</b> chose "
-        f"{kind.value}: <b>{html.escape(choice)}</b>.",
+        _pick_log_text(player, kind, value, actor_id, actor_name),
         parse_mode="HTML",
+    )
+
+
+def _pick_log_text(
+    player: Player,
+    kind: PickKind,
+    value: str,
+    actor_id: int,
+    actor_name: str,
+) -> str:
+    choice = f"Slice {value}" if kind is PickKind.SLICE else value
+    player_name = html.escape(player.display_name)
+    escaped_choice = html.escape(choice)
+    if player.telegram_user_id == actor_id:
+        return f"<b>{player_name}</b> chose {kind.value}: <b>{escaped_choice}</b>."
+    return (
+        f"<b>{player_name}</b> had their {kind.value} picked by "
+        f"<b>{html.escape(actor_name)}</b>: <b>{escaped_choice}</b>."
     )
 
 
