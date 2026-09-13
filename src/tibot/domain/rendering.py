@@ -20,7 +20,7 @@ _DIRECTIONS = (
     (-1.5, _SQRT_3 / 2),
     (-1.5, -_SQRT_3 / 2),
 )
-_CAPTION_OPACITY = round(255 * 0.9)
+_CAPTION_OPACITY = round(255 * 0.75)
 
 
 class BoardRenderer:
