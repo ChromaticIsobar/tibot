@@ -95,6 +95,10 @@ matching user can claim by joining. `/claim NAME` explicitly claims a placeholde
 opens the standalone faction, order, speaker, and seating tools, while `/result` republishes the
 latest setup and board.
 
+Use the **Start new setup** button or `/setup new` to open a replacement mode chooser while a roster
+or draft is active. The current setup remains resumable until a replacement mode is selected; then
+it is archived atomically, and any older in-flight generation result is rejected as stale.
+
 Every setup begins with a randomized snake-draft order. Slice drafts use three passes in which
 players choose a faction, slice, and seat in any order; seat 1 becomes Speaker. Whole-board drafts
 publish the anonymous board first, then use two passes for faction and seat choices before choosing

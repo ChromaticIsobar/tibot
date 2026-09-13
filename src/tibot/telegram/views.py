@@ -94,6 +94,7 @@ def roster_keyboard(game: Game, advanced: bool = False) -> InlineKeyboardMarkup:
             ]
         )
     rows.append([_button(game, "Cancel", "cancel")])
+    rows.append([_button(game, "Start new setup", "new_setup")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -115,6 +116,7 @@ def draft_keyboard(
             if game.mode is GameMode.MILTY and value == "1":
                 label += " (Speaker)"
             builder.button(text=label, callback_data=_callback(game, "seat", value))
+    builder.button(text="Start new setup", callback_data=_callback(game, "new_setup", "_"))
     builder.adjust(1)
     return builder.as_markup()
 

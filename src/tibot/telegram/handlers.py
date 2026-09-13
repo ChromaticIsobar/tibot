@@ -44,11 +44,17 @@ def create_router(service: GameService) -> Router:
         )
 
     @router.message(Command("setup"))
-    async def setup_command(message: Message) -> None:
+    async def setup_command(message: Message, command: CommandObject) -> None:
         if message.chat.type == "private":
             await message.answer("Add me to a group chat to prepare a game.")
             return
         game = await service.repository.get_active(message.chat.id)
+        if command.args and command.args.strip().casefold() == "new":
+            if game is not None and not _joined(game, _message_user(message).id):
+                await message.answer("Join the active setup before replacing it.")
+                return
+            await message.answer("Choose a new setup mode:", reply_markup=mode_keyboard())
+            return
         if game is None:
             await message.answer("Choose a setup mode:", reply_markup=mode_keyboard())
         else:
@@ -149,6 +155,13 @@ def create_router(service: GameService) -> Router:
                 game = loaded_game
                 if game.revision != callback_data.revision:
                     raise ConflictError("This screen is stale; use /setup to refresh")
+                if callback_data.action == "new_setup":
+                    if not _joined(game, query.from_user.id):
+                        raise ValueError("Join the setup before replacing it")
+                    await query.answer()
+                    if isinstance(query.message, Message):
+                        await _replace_with_mode_picker(query.message)
+                    return
                 if callback_data.action == "advanced":
                     await query.answer()
                     await _edit_game(query, game, service, advanced=True)
@@ -394,3 +407,11 @@ def _generation_arguments(arguments: str | None) -> tuple[int | None, int | None
         else:
             raise ValueError("Usage: /generate [SEED] [factions=N] [slices=N]")
     return seed, factions, slices
+
+
+async def _replace_with_mode_picker(message: Message) -> None:
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        await message.edit_reply_markup(reply_markup=None)
+    await message.answer("Choose a new setup mode:", reply_markup=mode_keyboard())
