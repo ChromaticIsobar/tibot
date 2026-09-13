@@ -100,6 +100,11 @@ players choose a faction, slice, and seat in any order; seat 1 becomes Speaker. 
 publish the anonymous board first, then use two passes for faction and seat choices before choosing
 Speaker randomly and publishing the finalized faction homes.
 
+Generated slice choices are published as images. During a draft, the bot publishes a refreshed
+board whenever a player's known seat can be combined with their faction or slice. Each successful
+choice also remains in the chat as a lightweight accountability log. Board scores and generator
+warnings are hidden behind Telegram spoiler formatting until opened.
+
 The roster screen's **Advanced commands** panel links to manual player and generation controls.
 Use `/generate [SEED] [factions=N] [slices=N]` to reproduce a seed or override pool sizes. `slices=N`
 only applies to slice drafts. In whole-board mode, `/board [SEED]` or the **Board only (Twilight's

@@ -66,9 +66,12 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
             lines.extend(("", f"Speaker: <b>{names[game.setup.speaker_player_id]}</b>"))
             if game.setup.speaker_seed is not None:
                 lines.append(f"Speaker seed: <code>{game.setup.speaker_seed}</code>")
+        diagnostics: list[str] = []
         if game.setup.score is not None:
-            lines.append(f"Board score: {game.setup.score}")
-        lines.extend(f"Warning: {warning}" for warning in game.setup.warnings)
+            diagnostics.append(f"Board score: {game.setup.score}")
+        diagnostics.extend(f"Warning: {warning}" for warning in game.setup.warnings)
+        if diagnostics:
+            lines.extend(("", f"<tg-spoiler>{'\n'.join(diagnostics)}</tg-spoiler>"))
     return "\n".join(lines)
 
 

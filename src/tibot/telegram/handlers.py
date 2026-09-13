@@ -99,6 +99,7 @@ def create_router(service: GameService) -> Router:
                 message,
                 service.generate(game, seed, factions, slices),
                 service,
+                publish_slices=True,
             )
         except ValueError as exc:
             await message.answer(html.escape(str(exc)))
@@ -130,6 +131,7 @@ def create_router(service: GameService) -> Router:
     async def setup_callback(query: CallbackQuery, callback_data: SetupCallback) -> None:
         if query.message is None:
             return
+        picked_player_id: int | None = None
         try:
             if callback_data.action == "new":
                 game = await service.begin(
@@ -162,9 +164,25 @@ def create_router(service: GameService) -> Router:
                         show_alert=True,
                     )
                     return
+                if callback_data.action in {kind.value for kind in PickKind}:
+                    draft = await service.repository.get_draft(game.id)
+                    picked_player_id = draft.current_player_id
                 game = await _apply_setup_action(query, callback_data, game, service)
             await query.answer()
             publish_board = callback_data.action in {"generate", "reroll"}
+            if (
+                callback_data.action == "generate"
+                and game.setup is not None
+                and game.setup.slices
+                and isinstance(query.message, Message)
+            ):
+                await _send_slices(query.message, game, service)
+            if picked_player_id is not None and isinstance(query.message, Message):
+                kind = PickKind(callback_data.action)
+                await _send_pick_log(
+                    query.message, game, picked_player_id, kind, callback_data.value
+                )
+                publish_board = _pick_changes_board(game, picked_player_id)
             await _edit_game(query, game, service, publish_board=publish_board)
         except (ValueError, ConflictError) as exc:
             await query.answer(str(exc), show_alert=True)
@@ -281,10 +299,58 @@ async def _send_board(message: Message, game: Game, service: GameService) -> Non
         )
 
 
-async def _run_message(message: Message, operation, service: GameService) -> None:  # type: ignore[no-untyped-def]
+async def _send_slices(message: Message, game: Game, service: GameService) -> None:
+    assert game.setup is not None
+    slices = {item.id: item for item in game.setup.slices}
+    for slice_id, image in await service.render_slices(game):
+        item = slices[slice_id]
+        await message.answer_photo(
+            BufferedInputFile(image, filename=f"slice-{slice_id}.png"),
+            caption=(
+                f"<b>Slice {slice_id}</b>\n"
+                f"{item.resources} resources / {item.influence} influence"
+            ),
+            parse_mode="HTML",
+        )
+
+
+async def _send_pick_log(
+    message: Message,
+    game: Game,
+    player_id: int,
+    kind: PickKind,
+    value: str,
+) -> None:
+    player = next(item for item in game.players if item.id == player_id)
+    choice = f"Slice {value}" if kind is PickKind.SLICE else value
+    await message.answer(
+        f"<b>{html.escape(player.display_name)}</b> chose "
+        f"{kind.value}: <b>{html.escape(choice)}</b>.",
+        parse_mode="HTML",
+    )
+
+
+def _pick_changes_board(game: Game, player_id: int) -> bool:
+    player = next(item for item in game.players if item.id == player_id)
+    if player.seat is None:
+        return False
+    if game.mode is GameMode.MILTY:
+        return player.faction is not None or player.slice_id is not None
+    return player.faction is not None
+
+
+async def _run_message(  # type: ignore[no-untyped-def]
+    message: Message,
+    operation,
+    service: GameService,
+    *,
+    publish_slices: bool = False,
+) -> None:
     try:
         game = await operation
         await _send_game(message, game, service)
+        if publish_slices:
+            await _send_slices(message, game, service)
     except (ValueError, ConflictError) as exc:
         await message.answer(html.escape(str(exc)))
 
