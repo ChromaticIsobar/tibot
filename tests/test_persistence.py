@@ -180,3 +180,22 @@ async def test_whole_board_can_complete_without_a_draft(tmp_path: Path) -> None:
     assert rerolled.setup is not None and rerolled.setup.board_only
     assert rerolled.previous_setup is not None and rerolled.previous_setup.seed == 300
     await repository.close()
+
+
+@pytest.mark.asyncio
+async def test_new_setup_rejects_superseded_generation(tmp_path: Path) -> None:
+    repository, service = await _service(tmp_path / "replacement.db")
+    old = await service.begin(-600, 1, "One", "one", GameMode.MILTY)
+    old = await service.add_placeholder(old, "Two")
+    old = await service.add_placeholder(old, "Three")
+
+    replacement = await service.begin(-600, 1, "One", "one", GameMode.WHOLE_BOARD)
+    assert replacement.status is GameStatus.ROSTER
+    archived = await repository.get_game(old.id)
+    assert archived is not None and archived.status is GameStatus.ARCHIVED
+    with pytest.raises(ConflictError, match="changed"):
+        await service.generate(old, seed=400)
+
+    active = await repository.get_active(-600)
+    assert active is not None and active.id == replacement.id
+    await repository.close()

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, Player
+from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
 from tibot.telegram.callbacks import SetupCallback
-from tibot.telegram.views import game_text, mode_keyboard, roster_keyboard
+from tibot.telegram.views import draft_keyboard, game_text, mode_keyboard, roster_keyboard
 
 
 def test_setup_callbacks_are_typed_and_fit_telegram_limit() -> None:
@@ -28,3 +28,21 @@ def test_score_and_warnings_are_hidden_as_spoilers() -> None:
     game.setup = GeneratedSetup(seed=2, score=4.5, warnings=["check this"])
     text = game_text(game)
     assert "<tg-spoiler>Board score: 4.5\nWarning: check this</tg-spoiler>" in text
+
+
+def test_active_setup_keyboards_offer_a_new_setup() -> None:
+    game = Game(1, -1, GameMode.MILTY, GameStatus.ROSTER, 1, 1)
+    roster_labels = [
+        button.text for row in roster_keyboard(game).inline_keyboard for button in row
+    ]
+    draft_labels = [
+        button.text
+        for row in draft_keyboard(
+            game,
+            Player(1, "A"),
+            {kind: [] for kind in PickKind},
+        ).inline_keyboard
+        for button in row
+    ]
+    assert "Start new setup" in roster_labels
+    assert "Start new setup" in draft_labels
