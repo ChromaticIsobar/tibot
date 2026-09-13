@@ -110,6 +110,10 @@ Use the **Start new setup** button or `/setup new` to open a replacement mode ch
 or draft is active. The current setup remains resumable until a replacement mode is selected; then
 it is archived atomically, and any older in-flight generation result is rejected as stale.
 
+During a draft, `/undo PLAYER NAME <faction|slice|seat>` rewinds the named choice. If newer choices
+exist, they are rewound as well so snake order remains valid; every restored option becomes available
+again and the recap returns to the affected turn.
+
 Every setup begins with a randomized snake-draft order. Slice drafts use three passes in which
 players choose a faction, slice, and seat in any order; seat 1 becomes Speaker. Whole-board drafts
 publish the anonymous board first, then use two passes for faction and seat choices before choosing

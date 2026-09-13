@@ -36,6 +36,7 @@ def create_router(service: GameService) -> Router:
             "/setup - create or resume a setup\n"
             "/addplayer NAME - add a handle or placeholder\n"
             "/removeplayer NAME - remove a roster player\n"
+            "/undo PLAYER CHOICE - rewind a faction, slice, or seat pick\n"
             "/generate [SEED] [factions=N] [slices=N] - generate with overrides\n"
             "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
@@ -137,6 +138,31 @@ def create_router(service: GameService) -> Router:
             seed = int(command.args) if command.args else None
             await _run_message(message, service.generate_board_only(game, seed), service)
         except ValueError as exc:
+            await message.answer(html.escape(str(exc)))
+
+    @router.message(Command("undo"))
+    async def undo_command(message: Message, command: CommandObject) -> None:
+        game = await service.repository.get_active(message.chat.id)
+        if game is None or game.status is not GameStatus.DRAFTING:
+            await message.answer("There is no active draft to rewind.")
+            return
+        user = _message_user(message)
+        if not _joined(game, user.id):
+            await message.answer("Join the setup before controlling it.")
+            return
+        try:
+            player_name, kind = _undo_arguments(command.args)
+            game, rewound = await service.undo_choice(
+                game, player_name, kind, user.id
+            )
+            suffix = "" if rewound == 1 else f" and {rewound - 1} later pick(s)"
+            await message.answer(
+                f"<b>{html.escape(user.full_name)}</b> rewound "
+                f"<b>{html.escape(player_name)}</b>'s {kind.value} choice{suffix}.",
+                parse_mode="HTML",
+            )
+            await _send_game(message, game, service)
+        except (ValueError, ConflictError) as exc:
             await message.answer(html.escape(str(exc)))
 
     @router.message(Command("randomize"))
@@ -468,6 +494,16 @@ def _choice_lines(text: str | None) -> list[str]:
     first, *remaining = text.splitlines()
     first_choice = first.partition(" ")[2].strip()
     return [choice.strip() for choice in (first_choice, *remaining) if choice.strip()]
+
+
+def _undo_arguments(arguments: str | None) -> tuple[str, PickKind]:
+    if not arguments or len(arguments.rsplit(maxsplit=1)) != 2:
+        raise ValueError("Usage: /undo PLAYER NAME <faction|slice|seat>")
+    player_name, raw_kind = arguments.rsplit(maxsplit=1)
+    try:
+        return player_name.strip(), PickKind(raw_kind.casefold())
+    except ValueError as exc:
+        raise ValueError("Choice must be faction, slice, or seat") from exc
 
 
 async def _replace_with_mode_picker(message: Message) -> None:
