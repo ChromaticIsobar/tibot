@@ -38,9 +38,20 @@ class GameRepository:
         self._connection.row_factory = aiosqlite.Row
         sql_root = resources.files("tibot.infrastructure.sql")
         configure_sql = sql_root.joinpath("configure.sql").read_text(encoding="utf-8")
-        migration_sql = sql_root.joinpath("001_initial.sql").read_text(encoding="utf-8")
         await self._connection.executescript(configure_sql)
-        await self._connection.executescript(migration_sql)
+        initial_sql = sql_root.joinpath("001_initial.sql").read_text(encoding="utf-8")
+        await self._connection.executescript(initial_sql)
+        version_cursor = await self._connection.execute(SQL["healthcheck"])
+        version_row = await version_cursor.fetchone()
+        version = int(version_row["version"]) if version_row else 1
+        migrations = sorted(
+            (item for item in sql_root.iterdir() if item.name[:3].isdigit()),
+            key=lambda item: item.name,
+        )
+        for migration in migrations:
+            migration_version = int(migration.name[:3])
+            if migration_version > version:
+                await self._connection.executescript(migration.read_text(encoding="utf-8"))
         await self._connection.commit()
 
     async def close(self) -> None:
@@ -229,7 +240,32 @@ class GameRepository:
         row = await cursor.fetchone()
         if row is None or row["draft_order_json"] is None:
             raise ValueError("Game does not have an active draft")
-        return DraftState(tuple(json.loads(row["draft_order_json"])), int(row["draft_pick_index"]))
+        required = (
+            (PickKind.FACTION, PickKind.SLICE, PickKind.SEAT)
+            if GameMode(row["mode"]) is GameMode.MILTY
+            else (PickKind.FACTION, PickKind.SEAT)
+        )
+        return DraftState(
+            tuple(json.loads(row["draft_order_json"])),
+            required,
+            int(row["draft_pick_index"]),
+        )
+
+    async def reset_completed_draft(self, game: Game) -> Game:
+        async with self._lock:
+            cursor = await self.connection.execute(
+                SQL["reset_completed_game"], (game.id, game.revision)
+            )
+            if cursor.rowcount != 1:
+                await self.connection.rollback()
+                raise ConflictError("This setup changed; refresh and try again")
+            await self.connection.execute(SQL["reset_player_picks"], (game.id,))
+            await self.connection.execute(SQL["clear_draft_picks"], (game.id,))
+            await self.connection.execute(SQL["clear_options"], (game.id,))
+            await self.connection.commit()
+        updated = await self.get_game(game.id)
+        assert updated is not None
+        return updated
 
     async def finalize_setup(self, game: Game) -> Game:
         if game.setup is None:

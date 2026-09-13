@@ -61,7 +61,7 @@ INSERT INTO generated_options VALUES (?, 'slice', ?, ?, 1);
 INSERT INTO generated_options VALUES (?, 'seat', ?, '{}', 1);
 
 -- name: get_draft
-SELECT draft_order_json, draft_pick_index FROM games WHERE id=?;
+SELECT draft_order_json, draft_pick_index, mode FROM games WHERE id=?;
 
 -- name: finalize_setup
 UPDATE games SET setup_json=?, revision=revision+1, updated_at=CURRENT_TIMESTAMP
@@ -100,6 +100,16 @@ UPDATE games SET status='cancelled', revision=revision+1 WHERE id=? AND revision
 
 -- name: bump_game
 UPDATE games SET revision=revision+1, updated_at=CURRENT_TIMESTAMP WHERE id=?;
+
+-- name: reset_player_picks
+UPDATE players SET faction=NULL, slice_id=NULL, seat=NULL WHERE game_id=?;
+
+-- name: clear_draft_picks
+DELETE FROM draft_picks WHERE game_id=?;
+
+-- name: reset_completed_game
+UPDATE games SET status='roster', revision=revision+1, draft_order_json=NULL,
+draft_pick_index=0 WHERE id=? AND revision=? AND status='complete';
 
 -- name: healthcheck
 SELECT version FROM schema_versions ORDER BY version DESC LIMIT 1;

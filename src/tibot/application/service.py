@@ -65,22 +65,52 @@ class GameService:
             raise ValueError("You are not a removable player in this roster")
         return await self._required_game(game.id)
 
-    async def generate(self, game: Game, seed: int | None = None) -> Game:
+    async def generate(
+        self,
+        game: Game,
+        seed: int | None = None,
+        faction_count: int | None = None,
+        slice_count: int | None = None,
+    ) -> Game:
         self._require_controller(game, None)
         if any(player.id is None for player in game.players):
             raise RuntimeError("Persisted players must have IDs")
         ids = [player.id for player in game.players if player.id is not None]
+        required: tuple[PickKind, ...]
         if game.mode is GameMode.MILTY:
-            setup = await asyncio.to_thread(self.generator.milty, ids, seed)
-            draft = DraftState(tuple(setup.order))
-            return await self.repository.save_generation(game, setup, GameStatus.DRAFTING, draft)
+            setup = await asyncio.to_thread(
+                self.generator.milty, ids, seed, faction_count, slice_count
+            )
+            required = (PickKind.FACTION, PickKind.SLICE, PickKind.SEAT)
+        else:
+            if slice_count is not None:
+                raise ValueError("Slice count only applies to slice drafts")
+            setup = await asyncio.to_thread(
+                self.generator.whole_board, ids, seed, faction_count
+            )
+            required = (PickKind.FACTION, PickKind.SEAT)
+        draft = DraftState(tuple(setup.order), required)
+        return await self.repository.save_generation(game, setup, GameStatus.DRAFTING, draft)
+
+    async def generate_board_only(self, game: Game, seed: int | None = None) -> Game:
+        if game.mode is not GameMode.WHOLE_BOARD:
+            raise ValueError("Board-only generation requires whole-board mode")
+        ids = [player.id for player in game.players if player.id is not None]
         setup = await asyncio.to_thread(self.generator.whole_board, ids, seed)
+        setup.factions = []
+        setup.order = []
+        setup.board_only = True
         return await self.repository.save_generation(game, setup, GameStatus.COMPLETE)
 
     async def reroll(self, game: Game) -> Game:
         if game.status is GameStatus.DRAFTING:
             raise ValueError("A draft cannot be rerolled after picking has started")
-        return await self.generate(game)
+        if game.mode is not GameMode.WHOLE_BOARD:
+            raise ValueError("Only whole boards can be rerolled")
+        reset = await self.repository.reset_completed_draft(game)
+        if game.setup is not None and game.setup.board_only:
+            return await self.generate_board_only(reset)
+        return await self.generate(reset)
 
     async def pick(
         self,
@@ -99,12 +129,17 @@ class GameService:
         updated = await self.repository.pick(game, player_id, kind, value, acting_user_id)
         if updated.status is GameStatus.COMPLETE:
             assert updated.setup is not None
-            await asyncio.to_thread(self.generator.assemble_milty, updated.setup, updated.players)
+            await asyncio.to_thread(
+                self.generator.finalize,
+                updated.setup,
+                updated.players,
+                random_speaker=updated.mode is GameMode.WHOLE_BOARD,
+            )
             updated = await self.repository.finalize_setup(updated)
         return updated
 
     async def render_result(self, game: Game) -> bytes | None:
-        if game.setup is None or not game.setup.board:
+        if game.setup is None or game.setup.board is None:
             return None
         return await asyncio.to_thread(self.renderer.render_board, game.setup.board)
 
