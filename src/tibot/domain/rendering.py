@@ -20,6 +20,7 @@ _DIRECTIONS = (
     (-1.5, _SQRT_3 / 2),
     (-1.5, -_SQRT_3 / 2),
 )
+_CAPTION_OPACITY = round(255 * 0.9)
 
 
 class BoardRenderer:
@@ -52,7 +53,12 @@ class BoardRenderer:
             left = x - tile_width // 2 - min_x + margin
             top = y - tile_height // 2 - min_y + margin
             canvas.alpha_composite(image, (left, top))
-            self._caption(canvas, (left + tile_width // 2, top + tile_height - 22), caption)
+            self._caption(
+                canvas,
+                (left + tile_width // 2, top + tile_height // 2),
+                caption,
+                round(edge * 0.33),
+            )
         return self._png(canvas)
 
     def render_slice(self, tile_ids: tuple[str, ...]) -> bytes:
@@ -67,7 +73,12 @@ class BoardRenderer:
             left = index % columns * width
             top = index // columns * height
             canvas.alpha_composite(image, (left, top))
-            self._caption(canvas, (left + width // 2, top + height - 18), caption, 18)
+            self._caption(
+                canvas,
+                (left + width // 2, top + height // 2),
+                caption,
+                round(edge * 0.33),
+            )
         return self._png(canvas)
 
     def _tile_image(
@@ -92,9 +103,10 @@ class BoardRenderer:
         image: Image.Image,
         position: tuple[int, int],
         caption: str,
-        font_size: int = 22,
+        font_size: int,
     ) -> None:
-        draw = ImageDraw.Draw(image)
+        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
         font: ImageFont.FreeTypeFont | ImageFont.ImageFont
         try:
             font = ImageFont.truetype(
@@ -107,10 +119,11 @@ class BoardRenderer:
             caption,
             anchor="mm",
             font=font,
-            fill="white",
-            stroke_width=2,
-            stroke_fill="black",
+            fill=(255, 255, 255, _CAPTION_OPACITY),
+            stroke_width=max(2, math.ceil(font_size * 0.1)),
+            stroke_fill=(0, 0, 0, _CAPTION_OPACITY),
         )
+        image.alpha_composite(overlay)
 
     @staticmethod
     def _center(position: BoardPosition, edge: int) -> tuple[int, int]:
