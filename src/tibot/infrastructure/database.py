@@ -163,6 +163,17 @@ class GameRepository:
                 await self.connection.commit()
             return bool(cursor.rowcount)
 
+    async def remove_player_by_name(self, game: Game, name: str) -> bool:
+        async with self._lock:
+            cursor = await self.connection.execute(
+                SQL["remove_player_by_name"],
+                (game.id, name.strip(), game.id, game.revision),
+            )
+            if cursor.rowcount:
+                await self._bump(game.id)
+                await self.connection.commit()
+            return bool(cursor.rowcount)
+
     async def claim(self, game_id: int, name: str, user_id: int, username: str | None) -> None:
         async with self._lock:
             try:

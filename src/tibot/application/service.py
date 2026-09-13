@@ -66,6 +66,14 @@ class GameService:
             raise ValueError("You are not a removable player in this roster")
         return await self._required_game(game.id)
 
+    async def remove_player(self, game: Game, name: str, acting_user_id: int) -> Game:
+        self._require_controller(game, acting_user_id)
+        if not name.strip():
+            raise ValueError("A player name is required")
+        if not await self.repository.remove_player_by_name(game, name):
+            raise ValueError("No roster player has that name")
+        return await self._required_game(game.id)
+
     async def generate(
         self,
         game: Game,

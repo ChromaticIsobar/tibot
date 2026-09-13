@@ -32,6 +32,10 @@ VALUES (?, ?, ?, ?);
 DELETE FROM players WHERE game_id=? AND telegram_user_id=?
 AND EXISTS(SELECT 1 FROM games WHERE id=? AND status='roster');
 
+-- name: remove_player_by_name
+DELETE FROM players WHERE game_id=? AND display_name=? COLLATE NOCASE
+AND EXISTS(SELECT 1 FROM games WHERE id=? AND status='roster' AND revision=?);
+
 -- name: claim_player
 UPDATE players SET telegram_user_id=?, telegram_username=?
 WHERE game_id=? AND display_name=? COLLATE NOCASE AND telegram_user_id IS NULL;
