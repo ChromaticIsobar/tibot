@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -42,7 +44,12 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
     if game.status is GameStatus.ROSTER:
         lines.extend(("", "Join with the button or use /addplayer NAME."))
     if draft_player is not None:
-        lines.extend(("", f"Current pick: <b>{draft_player.display_name}</b>"))
+        picker = (
+            f"@{html.escape(draft_player.telegram_username.lstrip('@'))}"
+            if draft_player.telegram_username
+            else html.escape(draft_player.display_name).replace("@", "&#64;")
+        )
+        lines.extend(("", f"Current pick: <b>{picker}</b>"))
     if game.setup is not None:
         lines.extend(("", f"Seed: <code>{game.setup.seed}</code>"))
         names = {player.id: player.display_name for player in game.players}
