@@ -189,6 +189,14 @@ class SetupGenerator:
         Random(seed).shuffle(order)
         return GeneratedSetup(seed=seed, order=order)
 
+    @staticmethod
+    def random_choice(choices: Sequence[str], seed: int | None = None) -> tuple[str, int]:
+        normalized = [choice.strip() for choice in choices if choice.strip()]
+        if not normalized:
+            raise ValueError("At least one non-empty choice is required")
+        seed = seed if seed is not None else secrets.randbits(63)
+        return Random(seed).choice(normalized), seed
+
     def _empty_layout(self, player_count: int, *, slices: bool = False) -> BoardLayout:
         spec = slice_layout_for(player_count) if slices else layout_for(player_count)
         tiles = [BoardTile(BoardPosition(0, 0), self._mecatol_id())]
