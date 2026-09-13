@@ -105,6 +105,10 @@ board whenever a player's known seat can be combined with their faction or slice
 choice also remains in the chat as a lightweight accountability log. Board scores and generator
 warnings are hidden behind Telegram spoiler formatting until opened.
 
+After every action, generated media and the permanent choice log are posted first. The bot then
+reposts the current recap and controls as the newest message, so the active UI stays at the bottom
+of the conversation instead of requiring players to scroll upward.
+
 The roster screen's **Advanced commands** panel links to manual player and generation controls.
 Use `/generate [SEED] [factions=N] [slices=N]` to reproduce a seed or override pool sizes. `slices=N`
 only applies to slice drafts. In whole-board mode, `/board [SEED]` or the **Board only (Twilight's

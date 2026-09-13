@@ -6,6 +6,7 @@ import html
 import logging
 
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
@@ -248,13 +249,13 @@ async def _apply_setup_action(
 
 
 async def _send_game(message: Message, game: Game, service: GameService) -> None:
+    await _send_board(message, game, service)
     draft_player, markup = await _screen(game, service)
     await message.answer(
         game_text(game, draft_player),
         parse_mode="HTML",
         reply_markup=markup,
     )
-    await _send_board(message, game, service)
 
 
 async def _edit_game(
@@ -268,11 +269,15 @@ async def _edit_game(
     if not isinstance(query.message, Message):
         return
     draft_player, markup = await _screen(game, service, advanced=advanced)
-    await query.message.edit_text(
-        game_text(game, draft_player), parse_mode="HTML", reply_markup=markup
-    )
     if publish_board or game.status is GameStatus.COMPLETE:
         await _send_board(query.message, game, service)
+    try:
+        await query.message.delete()
+    except TelegramBadRequest:
+        await query.message.edit_reply_markup(reply_markup=None)
+    await query.message.answer(
+        game_text(game, draft_player), parse_mode="HTML", reply_markup=markup
+    )
 
 
 async def _screen(  # type: ignore[no-untyped-def]
@@ -348,9 +353,9 @@ async def _run_message(  # type: ignore[no-untyped-def]
 ) -> None:
     try:
         game = await operation
-        await _send_game(message, game, service)
         if publish_slices:
             await _send_slices(message, game, service)
+        await _send_game(message, game, service)
     except (ValueError, ConflictError) as exc:
         await message.answer(html.escape(str(exc)))
 
