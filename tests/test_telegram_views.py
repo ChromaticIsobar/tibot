@@ -58,3 +58,11 @@ def test_pick_log_distinguishes_own_and_proxy_picks() -> None:
     assert _pick_log_text(placeholder, PickKind.FACTION, "Xxcha", 20, "Bob") == (
         "<b>Charlie</b> had their faction picked by <b>Bob</b>: <b>Xxcha</b>."
     )
+
+
+def test_current_picker_uses_linked_telegram_handle() -> None:
+    game = Game(1, -1, GameMode.MILTY, GameStatus.DRAFTING, 1, 1)
+    linked = Player(1, "Alice Example", telegram_user_id=10, telegram_username="alice")
+    placeholder = Player(2, "Offline Player")
+    assert "Current pick: <b>@alice</b>" in game_text(game, linked)
+    assert "Current pick: <b>Offline Player</b>" in game_text(game, placeholder)
