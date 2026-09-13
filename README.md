@@ -91,7 +91,8 @@ rm -f data/tibot.db data/tibot.db-shm data/tibot.db-wal
 
 In a Telegram group, `/setup` opens the persistent setup wizard. Players join through its inline
 buttons; `/addplayer NAME` creates an offline seat and `/addplayer @handle` creates a seat that the
-matching user can claim by joining. `/claim NAME` explicitly claims a placeholder. `/randomize`
+matching user can claim by joining. A joined player can use `/removeplayer NAME` to remove an exact
+case-insensitive name while the roster is open. `/claim NAME` explicitly claims a placeholder. `/randomize`
 opens the standalone faction, order, speaker, and seating tools, while `/result` republishes the
 latest setup and board.
 

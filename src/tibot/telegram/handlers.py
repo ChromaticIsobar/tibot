@@ -35,6 +35,7 @@ def create_router(service: GameService) -> Router:
             "<b>TIBot</b> prepares 3-6 player Twilight Imperium games.\n\n"
             "/setup - create or resume a setup\n"
             "/addplayer NAME - add a handle or placeholder\n"
+            "/removeplayer NAME - remove a roster player\n"
             "/generate [SEED] [factions=N] [slices=N] - generate with overrides\n"
             "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
@@ -75,6 +76,21 @@ def create_router(service: GameService) -> Router:
             await message.answer("Usage: /addplayer NAME or /addplayer @handle")
             return
         await _run_message(message, service.add_placeholder(game, name), service)
+
+    @router.message(Command("removeplayer"))
+    async def remove_player_command(message: Message, command: CommandObject) -> None:
+        game = await _controlled_roster(message, service)
+        if game is None:
+            return
+        name = (command.args or "").strip()
+        if not name:
+            await message.answer("Usage: /removeplayer NAME")
+            return
+        await _run_message(
+            message,
+            service.remove_player(game, name, _message_user(message).id),
+            service,
+        )
 
     @router.message(Command("claim"))
     async def claim_command(message: Message, command: CommandObject) -> None:
@@ -168,7 +184,7 @@ def create_router(service: GameService) -> Router:
                     return
                 if callback_data.action == "help_add":
                     await query.answer(
-                        "Send /addplayer NAME or /addplayer @handle",
+                        "Send /addplayer NAME, /addplayer @handle, or /removeplayer NAME",
                         show_alert=True,
                     )
                     return
