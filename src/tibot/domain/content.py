@@ -87,5 +87,9 @@ def _parse_tiles(data: dict[str, Any]) -> dict[str, Tile]:
             influence=sum(int(planet.get("influence", 0)) for planet in planets),
             wormhole=raw.get("wormhole"),
             anomaly=raw.get("anomaly"),
+            planets=len(planets),
+            specialties=sum(bool(planet.get("specialty")) for planet in planets),
+            legendary=sum(bool(planet.get("legendary")) for planet in planets),
+            stations=sum(bool(planet.get("station")) for planet in planets),
         )
     return result

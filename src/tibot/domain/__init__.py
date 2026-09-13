@@ -3,6 +3,11 @@
 from tibot.domain.content import ContentCatalog, ContentError
 from tibot.domain.generation import SetupGenerator
 from tibot.domain.models import (
+    BoardGeometry,
+    BoardLayout,
+    BoardPosition,
+    BoardRole,
+    BoardTile,
     DraftState,
     Faction,
     Game,
@@ -15,6 +20,11 @@ from tibot.domain.models import (
 )
 
 __all__ = [
+    "BoardGeometry",
+    "BoardLayout",
+    "BoardPosition",
+    "BoardRole",
+    "BoardTile",
     "ContentCatalog",
     "ContentError",
     "DraftState",
@@ -28,4 +38,3 @@ __all__ = [
     "SetupGenerator",
     "Slice",
 ]
-
