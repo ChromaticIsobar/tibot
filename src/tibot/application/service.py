@@ -147,6 +147,17 @@ class GameService:
             updated = await self.repository.finalize_setup(updated)
         return updated
 
+    async def undo_choice(
+        self,
+        game: Game,
+        player_name: str,
+        kind: PickKind,
+        acting_user_id: int,
+    ) -> tuple[Game, int]:
+        self._require_controller(game, acting_user_id)
+        rewound = await self.repository.undo_pick(game, player_name, kind)
+        return await self._required_game(game.id), rewound
+
     async def render_result(self, game: Game) -> bytes | None:
         if game.setup is None:
             return None

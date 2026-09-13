@@ -95,6 +95,41 @@ UPDATE players SET seat=? WHERE id=?;
 INSERT INTO draft_picks(game_id, player_id, kind, option_key, picked_by)
 VALUES (?, ?, ?, ?, ?);
 
+-- name: find_draft_pick
+SELECT dp.id FROM draft_picks AS dp
+JOIN players AS p ON p.id=dp.player_id
+JOIN games AS g ON g.id=dp.game_id
+WHERE dp.game_id=? AND p.display_name=? COLLATE NOCASE AND dp.kind=?
+AND g.status='drafting' AND g.revision=?
+ORDER BY dp.id DESC LIMIT 1;
+
+-- name: get_rewound_picks
+SELECT id, player_id, kind, option_key FROM draft_picks
+WHERE game_id=? AND id>=? ORDER BY id;
+
+-- name: count_picks_before
+SELECT COUNT(*) AS count FROM draft_picks WHERE game_id=? AND id<?;
+
+-- name: restore_option
+UPDATE generated_options SET available=1
+WHERE game_id=? AND kind=? AND option_key=?;
+
+-- name: clear_player_faction
+UPDATE players SET faction=NULL WHERE id=?;
+
+-- name: clear_player_slice
+UPDATE players SET slice_id=NULL WHERE id=?;
+
+-- name: clear_player_seat
+UPDATE players SET seat=NULL WHERE id=?;
+
+-- name: delete_rewound_picks
+DELETE FROM draft_picks WHERE game_id=? AND id>=?;
+
+-- name: rewind_draft
+UPDATE games SET draft_pick_index=?, revision=revision+1, updated_at=CURRENT_TIMESTAMP
+WHERE id=? AND revision=? AND status='drafting';
+
 -- name: advance_draft
 UPDATE games SET draft_pick_index=?, status=?, revision=revision+1,
 updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=?;

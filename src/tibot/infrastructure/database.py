@@ -262,6 +262,51 @@ class GameRepository:
             int(row["draft_pick_index"]),
         )
 
+    async def undo_pick(self, game: Game, player_name: str, kind: PickKind) -> int:
+        async with self._lock:
+            cursor = await self.connection.execute(
+                SQL["find_draft_pick"],
+                (game.id, player_name.strip(), kind.value, game.revision),
+            )
+            target = await cursor.fetchone()
+            if target is None:
+                raise ValueError("That player has no matching active-draft choice")
+            pick_id = int(target["id"])
+            picks_cursor = await self.connection.execute(
+                SQL["get_rewound_picks"], (game.id, pick_id)
+            )
+            picks = list(await picks_cursor.fetchall())
+            count_cursor = await self.connection.execute(
+                SQL["count_picks_before"], (game.id, pick_id)
+            )
+            count_row = await count_cursor.fetchone()
+            assert count_row is not None
+            pick_index = int(count_row["count"])
+            clear_queries = {
+                PickKind.FACTION: "clear_player_faction",
+                PickKind.SLICE: "clear_player_slice",
+                PickKind.SEAT: "clear_player_seat",
+            }
+            for pick in picks:
+                await self.connection.execute(
+                    SQL["restore_option"],
+                    (game.id, str(pick["kind"]), str(pick["option_key"])),
+                )
+                await self.connection.execute(
+                    SQL[clear_queries[PickKind(pick["kind"])]],
+                    (int(pick["player_id"]),),
+                )
+            await self.connection.execute(SQL["delete_rewound_picks"], (game.id, pick_id))
+            updated = await self.connection.execute(
+                SQL["rewind_draft"],
+                (pick_index, game.id, game.revision),
+            )
+            if updated.rowcount != 1:
+                await self.connection.rollback()
+                raise ConflictError("This setup changed; refresh and try again")
+            await self.connection.commit()
+            return len(picks)
+
     async def reset_completed_draft(self, game: Game) -> Game:
         async with self._lock:
             cursor = await self.connection.execute(
