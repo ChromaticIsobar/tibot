@@ -42,6 +42,21 @@ async def test_roster_survives_restart_and_handle_placeholder_is_claimed(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_joined_player_can_remove_exact_roster_name(tmp_path: Path) -> None:
+    repository, service = await _service(tmp_path / "remove-player.db")
+    game = await service.begin(-150, 11, "Creator", "creator", GameMode.MILTY)
+    game = await service.add_placeholder(game, "Offline Player")
+    game = await service.add_placeholder(game, "Third")
+    game = await service.remove_player(game, "offline player", 11)
+    assert [player.display_name for player in game.players] == ["Creator", "Third"]
+
+    game = await service.add_placeholder(game, "Replacement")
+    game = await service.generate(game, seed=10)
+    with pytest.raises(ValueError, match="No roster player"):
+        await service.remove_player(game, "Third", 11)
+    await repository.close()
+
+@pytest.mark.asyncio
 async def test_complete_milty_draft_and_reject_stale_revision(tmp_path: Path) -> None:
     repository, service = await _service(tmp_path / "draft.db")
     game = await service.begin(-200, 101, "One", "one", GameMode.MILTY)
