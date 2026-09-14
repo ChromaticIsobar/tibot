@@ -143,9 +143,9 @@ sudo systemctl start tibot
 ### Import an external five-player draft
 
 An in-progress whole-board draft from the legacy generator can be continued in TIBot. First use
-`/setup` in the target Telegram chat, select **Whole board**, add exactly five players, and leave the
-game in the roster phase. The players' display names or Telegram usernames are accepted by the
-import command.
+`/setup` in the target Telegram chat, select **Whole board**, and leave the game in the roster phase.
+With `--order`, the importer preserves matching joined players and adds missing handles as claimable
+placeholders. It refuses to proceed if the roster contains someone absent from that order.
 
 Export the legacy board with `random5wholeboard --export-json PATH`, transfer that JSON file to the
 VM, then stop TIBot and make a database backup before importing:
