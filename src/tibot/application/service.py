@@ -191,6 +191,12 @@ class GameService:
             for item in game.setup.slices
         ]
 
+    async def render_empty_board(self, game: Game) -> bytes:
+        board = self.generator.empty_board(
+            len(game.players), slices=game.mode is GameMode.MILTY
+        )
+        return await asyncio.to_thread(self.renderer.render_board, board)
+
     @staticmethod
     def _require_controller(game: Game, user_id: int | None) -> None:
         if user_id is not None and not any(

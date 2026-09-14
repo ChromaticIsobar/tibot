@@ -204,6 +204,11 @@ class SetupGenerator:
         seed = seed if seed is not None else secrets.randbits(63)
         return Random(seed).randint(1, sides), seed
 
+    def empty_board(self, player_count: int, *, slices: bool) -> BoardLayout:
+        if not 3 <= player_count <= 6:
+            raise ValueError("A board requires 3 to 6 players")
+        return self._empty_layout(player_count, slices=slices)
+
     def _empty_layout(self, player_count: int, *, slices: bool = False) -> BoardLayout:
         spec = slice_layout_for(player_count) if slices else layout_for(player_count)
         tiles = [BoardTile(BoardPosition(0, 0), self._mecatol_id())]
