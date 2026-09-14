@@ -117,6 +117,10 @@ During a draft, `/undo PLAYER NAME <faction|slice|seat>` rewinds the named choic
 exist, they are rewound as well so snake order remains valid; every restored option becomes available
 again and the recap returns to the affected turn.
 
+After the final draft choice, the setup waits for confirmation instead of finalizing immediately.
+Use **Undo last choice** to reopen the final turn, or **Start** to place faction homes, resolve the
+Speaker rule, complete the setup, and publish the final board.
+
 Every setup begins with a randomized snake-draft order. Slice drafts use three passes in which
 players choose a faction, slice, and seat in any order; seat 1 becomes Speaker. Whole-board drafts
 publish the anonymous board first, then use two passes for faction and seat choices before choosing

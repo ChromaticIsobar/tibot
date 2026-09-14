@@ -16,6 +16,7 @@ from tibot.infrastructure.database import ConflictError
 from tibot.telegram.callbacks import RandomCallback, SetupCallback
 from tibot.telegram.views import (
     complete_keyboard,
+    draft_confirmation_keyboard,
     draft_keyboard,
     game_text,
     mode_keyboard,
@@ -276,6 +277,10 @@ def create_router(service: GameService) -> Router:
                         await _send_empty_board(query.message, game, service)
                 game = await _apply_setup_action(query, callback_data, game, service)
             publish_board = callback_data.action in {"generate", "reroll"}
+            if callback_data.action == "undo_last" and isinstance(query.message, Message):
+                await query.message.answer("The last draft choice was undone.")
+            if callback_data.action in {"start", "undo_last"}:
+                publish_board = True
             if (
                 callback_data.action == "generate"
                 and game.setup is not None
@@ -376,6 +381,11 @@ async def _apply_setup_action(
         return await service.generate_board_only(game)
     if data.action == "reroll":
         return await service.reroll(game)
+    if data.action == "start":
+        return await service.confirm_start(game, user.id)
+    if data.action == "undo_last":
+        updated, _, _ = await service.undo_last_choice(game, user.id)
+        return updated
     if data.action == "cancel":
         await service.repository.cancel(game)
         game.status = GameStatus.CANCELLED
@@ -420,6 +430,8 @@ async def _screen(  # type: ignore[no-untyped-def]
         return None, roster_keyboard(game, advanced)
     if game.status is GameStatus.DRAFTING:
         draft = await service.repository.get_draft(game.id)
+        if draft.complete:
+            return None, draft_confirmation_keyboard(game)
         player = next(item for item in game.players if item.id == draft.current_player_id)
         options = {
             kind: await service.repository.available_options(game.id, kind) for kind in PickKind

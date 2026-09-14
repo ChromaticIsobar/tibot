@@ -132,6 +132,16 @@ def draft_keyboard(
     return builder.as_markup()
 
 
+def draft_confirmation_keyboard(game: Game) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_button(game, "Start", "start")],
+            [_button(game, "Undo last choice", "undo_last")],
+            [_button(game, "Start new setup", "new_setup")],
+        ]
+    )
+
+
 def complete_keyboard(game: Game) -> InlineKeyboardMarkup | None:
     if game.mode is not GameMode.WHOLE_BOARD:
         return None
