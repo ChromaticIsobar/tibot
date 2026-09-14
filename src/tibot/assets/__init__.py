@@ -1,0 +1,1 @@
+"""Packaged project-owned resources."""
