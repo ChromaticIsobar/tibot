@@ -360,6 +360,14 @@ async def _apply_setup_action(
         return await service.join(game, user.id, user.full_name, user.username)
     if data.action == "leave":
         return await service.leave(game, user.id)
+    if data.action in {kind.value for kind in PickKind}:
+        return await service.pick(
+            game,
+            PickKind(data.action),
+            data.value,
+            user.id,
+            user.username,
+        )
     if not _joined(game, user.id):
         raise ValueError("Join the setup before controlling it")
     if data.action == "generate":
@@ -377,8 +385,6 @@ async def _apply_setup_action(
         await service.repository.cancel(game)
         game.status = GameStatus.CANCELLED
         return game
-    if data.action in {kind.value for kind in PickKind}:
-        return await service.pick(game, PickKind(data.action), data.value, user.id)
     raise ValueError("Unknown setup action")
 
 

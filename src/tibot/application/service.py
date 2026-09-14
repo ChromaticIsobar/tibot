@@ -127,6 +127,7 @@ class GameService:
         kind: PickKind,
         value: str,
         acting_user_id: int,
+        acting_username: str | None = None,
     ) -> Game:
         if game.status is not GameStatus.DRAFTING:
             raise ValueError("This game does not have an active draft")
@@ -134,6 +135,23 @@ class GameService:
         player_id = draft.current_player_id
         if player_id is None:
             raise ValueError("Draft is already complete")
+        if not any(
+            player.telegram_user_id == acting_user_id for player in game.players
+        ):
+            current_player = next(player for player in game.players if player.id == player_id)
+            handle = f"@{acting_username}".casefold() if acting_username else None
+            if (
+                current_player.is_placeholder
+                and handle
+                and current_player.display_name.casefold() == handle
+            ):
+                await self.repository.claim(
+                    game.id,
+                    current_player.display_name,
+                    acting_user_id,
+                    acting_username,
+                )
+                game = await self._required_game(game.id)
         self._require_controller(game, acting_user_id)
         updated = await self.repository.pick(game, player_id, kind, value, acting_user_id)
         return updated
