@@ -14,6 +14,7 @@ from tibot.application.service import GameService
 from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
 from tibot.infrastructure.database import ConflictError
 from tibot.telegram.callbacks import RandomCallback, SetupCallback
+from tibot.telegram.formatting import faction_link
 from tibot.telegram.views import (
     complete_keyboard,
     draft_confirmation_keyboard,
@@ -337,7 +338,9 @@ def create_router(service: GameService) -> Router:
         try:
             if callback_data.action == "factions":
                 result = service.generator.random_factions(callback_data.value)
-                text = "\n".join(f"{i}. {f.name}" for i, f in enumerate(result.factions, 1))
+                text = "\n".join(
+                    f"{i}. {faction_link(f.name)}" for i, f in enumerate(result.factions, 1)
+                )
             else:
                 if game is None or not game.players:
                     raise ValueError("This randomizer needs an active setup roster")
@@ -496,7 +499,9 @@ def _pick_log_text(
 ) -> str:
     choice = f"Slice {value}" if kind is PickKind.SLICE else value
     player_name = html.escape(player.display_name)
-    escaped_choice = html.escape(choice)
+    escaped_choice = (
+        faction_link(value) if kind is PickKind.FACTION else html.escape(choice)
+    )
     if player.telegram_user_id == actor_id:
         return f"<b>{player_name}</b> chose {kind.value}: <b>{escaped_choice}</b>."
     return (

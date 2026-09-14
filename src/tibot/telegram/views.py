@@ -9,6 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
 from tibot.telegram.callbacks import RandomCallback, SetupCallback
+from tibot.telegram.formatting import faction_link
 
 
 def mode_keyboard() -> InlineKeyboardMarkup:
@@ -34,7 +35,7 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
         picks = ", ".join(
             value
             for value in (
-                player.faction,
+                faction_link(player.faction) if player.faction else None,
                 f"Slice {player.slice_id}" if player.slice_id else None,
                 f"Seat {player.seat}" if player.seat else None,
             )
@@ -68,7 +69,7 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
             )
         if game.mode is GameMode.WHOLE_BOARD and game.setup.factions:
             lines.extend(("", "Faction pool:"))
-            lines.extend(f"- {faction.name}" for faction in game.setup.factions)
+            lines.extend(f"- {faction_link(faction.name)}" for faction in game.setup.factions)
         if game.setup.speaker_player_id is not None:
             lines.extend(("", f"Speaker: <b>{names[game.setup.speaker_player_id]}</b>"))
             if game.setup.speaker_seed is not None:
