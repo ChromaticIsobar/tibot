@@ -67,7 +67,7 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
                 f"({item.resources} resources / {item.influence} influence)"
                 for item in game.setup.slices
             )
-        if game.mode is GameMode.WHOLE_BOARD and game.setup.factions:
+        if game.status is GameStatus.DRAFTING and game.setup.factions:
             lines.extend(("", "Faction pool:"))
             lines.extend(f"- {faction_link(faction.name)}" for faction in game.setup.factions)
         if game.setup.speaker_player_id is not None:
