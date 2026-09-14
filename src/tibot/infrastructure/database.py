@@ -97,6 +97,13 @@ class GameRepository:
         row = await cursor.fetchone()
         return await self.get_game(int(row["id"])) if row else None
 
+    async def list_roster_games(self) -> list[tuple[int, int]]:
+        cursor = await self.connection.execute(SQL["list_roster_games"])
+        return [
+            (int(row["id"]), int(row["chat_id"]))
+            for row in await cursor.fetchall()
+        ]
+
     async def get_game(self, game_id: int) -> Game | None:
         cursor = await self.connection.execute(SQL["get_game"], (game_id,))
         row = await cursor.fetchone()
@@ -197,12 +204,15 @@ class GameRepository:
     ) -> Game:
         async with self._lock:
             encoded = json.dumps(setup.to_dict(), separators=(",", ":"))
+            stored_seed: int | str = (
+                setup.seed if -(2**63) <= setup.seed < 2**63 else str(setup.seed)
+            )
             order = json.dumps(draft.player_order) if draft else None
             cursor = await self.connection.execute(
                 SQL["save_generation"],
                 (
                     encoded,
-                    setup.seed,
+                    stored_seed,
                     status.value,
                     order,
                     draft.pick_index if draft else 0,
@@ -218,7 +228,7 @@ class GameRepository:
             )
             await self.connection.execute(
                 SQL["add_result"],
-                (game.id, setup.seed, encoded),
+                (game.id, stored_seed, encoded),
             )
             await self.connection.execute(
                 SQL["clear_options"], (game.id,)

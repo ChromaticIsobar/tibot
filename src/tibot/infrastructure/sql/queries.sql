@@ -12,6 +12,9 @@ ORDER BY id DESC LIMIT 1;
 -- name: get_latest_game_id
 SELECT id FROM games WHERE chat_id=? ORDER BY id DESC LIMIT 1;
 
+-- name: list_roster_games
+SELECT id, chat_id FROM games WHERE status='roster' ORDER BY id DESC;
+
 -- name: get_game
 SELECT * FROM games WHERE id=?;
 
