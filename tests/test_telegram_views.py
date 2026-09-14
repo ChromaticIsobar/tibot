@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from tibot.domain.content import ContentCatalog
 from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
 from tibot.telegram.callbacks import SetupCallback
+from tibot.telegram.formatting import FACTION_WIKI_LINKS, faction_link
 from tibot.telegram.handlers import _choice_lines, _pick_log_text, _undo_arguments
 from tibot.telegram.views import (
     draft_confirmation_keyboard,
@@ -82,12 +84,38 @@ def test_completed_draft_offers_start_and_undo_last_choice() -> None:
 def test_pick_log_distinguishes_own_and_proxy_picks() -> None:
     linked = Player(1, "Alice", telegram_user_id=10)
     placeholder = Player(2, "Charlie")
-    assert _pick_log_text(linked, PickKind.FACTION, "Xxcha", 10, "Alice") == (
-        "<b>Alice</b> chose faction: <b>Xxcha</b>."
+    assert _pick_log_text(
+        linked, PickKind.FACTION, "The Xxcha Kingdom", 10, "Alice"
+    ) == (
+        "<b>Alice</b> chose faction: <b>"
+        '<a href="https://twilight-imperium.fandom.com/wiki/The_Xxcha_Kingdom">'
+        "The Xxcha Kingdom</a></b>."
     )
-    assert _pick_log_text(placeholder, PickKind.FACTION, "Xxcha", 20, "Bob") == (
-        "<b>Charlie</b> had their faction picked by <b>Bob</b>: <b>Xxcha</b>."
+    assert _pick_log_text(
+        placeholder, PickKind.FACTION, "The Xxcha Kingdom", 20, "Bob"
+    ) == (
+        "<b>Charlie</b> had their faction picked by <b>Bob</b>: <b>"
+        '<a href="https://twilight-imperium.fandom.com/wiki/The_Xxcha_Kingdom">'
+        "The Xxcha Kingdom</a></b>."
     )
+
+
+def test_faction_links_include_irregular_wiki_pages() -> None:
+    assert faction_link("The Universities of Jol-Nar") == (
+        '<a href="https://twilight-imperium.fandom.com/wiki/'
+        'The_Universities_of_Jol-Nar">The Universities of Jol-Nar</a>'
+    )
+    assert FACTION_WIKI_LINKS["The Lizix Mindnet"].endswith("/The_L1Z1X_Mindnet")
+    assert FACTION_WIKI_LINKS["The Firmament"].endswith(
+        "/The_Firmament_/_The_Obsidian"
+    )
+    with pytest.raises(ValueError, match="Missing wiki link"):
+        faction_link("Unknown <Faction>")
+
+
+def test_every_catalog_faction_has_a_wiki_link() -> None:
+    catalog_names = {faction.name for faction in ContentCatalog.load().factions}
+    assert set(FACTION_WIKI_LINKS) == catalog_names
 
 
 def test_current_picker_uses_linked_telegram_handle() -> None:
