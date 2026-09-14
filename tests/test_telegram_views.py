@@ -6,6 +6,7 @@ from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, Pick
 from tibot.telegram.callbacks import SetupCallback
 from tibot.telegram.handlers import _choice_lines, _pick_log_text, _undo_arguments
 from tibot.telegram.views import (
+    draft_confirmation_keyboard,
     draft_keyboard,
     game_text,
     mode_keyboard,
@@ -66,6 +67,16 @@ def test_active_setup_keyboards_offer_a_new_setup() -> None:
     ]
     assert "Start new setup" in roster_labels
     assert "Start new setup" in draft_labels
+
+
+def test_completed_draft_offers_start_and_undo_last_choice() -> None:
+    game = Game(1, -1, GameMode.MILTY, GameStatus.DRAFTING, 3, 1)
+    labels = [
+        button.text
+        for row in draft_confirmation_keyboard(game).inline_keyboard
+        for button in row
+    ]
+    assert labels == ["Start", "Undo last choice", "Start new setup"]
 
 
 def test_pick_log_distinguishes_own_and_proxy_picks() -> None:

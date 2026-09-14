@@ -69,8 +69,10 @@ async def test_complete_milty_draft_and_reject_stale_revision(tmp_path: Path) ->
     with pytest.raises(ConflictError, match="changed"):
         await service.generate(stale, seed=56)
 
-    while game.status is GameStatus.DRAFTING:
+    while True:
         draft = await repository.get_draft(game.id)
+        if draft.complete:
+            break
         player = next(item for item in game.players if item.id == draft.current_player_id)
         kind = next(
             candidate
@@ -85,6 +87,8 @@ async def test_complete_milty_draft_and_reject_stale_revision(tmp_path: Path) ->
         actor = player.telegram_user_id or 101
         game = await service.pick(game, kind, option, actor)
 
+    assert game.status is GameStatus.DRAFTING
+    game = await service.confirm_start(game, 101)
     assert game.status is GameStatus.COMPLETE
     assert all(player.faction and player.slice_id and player.seat for player in game.players)
     assert len({player.faction for player in game.players}) == 3
@@ -138,6 +142,47 @@ async def test_undo_choice_rewinds_later_picks_and_restores_options(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_completed_draft_can_undo_last_choice_before_start(tmp_path: Path) -> None:
+    repository, service = await _service(tmp_path / "confirm.db")
+    game = await service.begin(-275, 101, "One", "one", GameMode.WHOLE_BOARD)
+    game = await service.add_placeholder(game, "Two")
+    game = await service.add_placeholder(game, "Three")
+    game = await service.generate(game, seed=85)
+
+    while True:
+        draft = await repository.get_draft(game.id)
+        if draft.complete:
+            break
+        player = next(item for item in game.players if item.id == draft.current_player_id)
+        kind = next(
+            candidate
+            for candidate, current in (
+                (PickKind.FACTION, player.faction),
+                (PickKind.SEAT, player.seat),
+            )
+            if current is None
+        )
+        option = (await repository.available_options(game.id, kind))[0]
+        game = await service.pick(game, kind, option, player.telegram_user_id or 101)
+
+    assert game.status is GameStatus.DRAFTING
+    assert game.setup is not None and game.setup.speaker_player_id is None
+    game, player_name, kind = await service.undo_last_choice(game, 101)
+    draft = await repository.get_draft(game.id)
+    assert not draft.complete
+    assert draft.current_player_id == next(
+        player.id for player in game.players if player.display_name == player_name
+    )
+
+    option = (await repository.available_options(game.id, kind))[0]
+    game = await service.pick(game, kind, option, 101)
+    game = await service.confirm_start(game, 101)
+    assert game.status is GameStatus.COMPLETE
+    assert game.setup is not None and game.setup.speaker_player_id is not None
+    await repository.close()
+
+
+@pytest.mark.asyncio
 async def test_whole_board_reroll_retains_previous_result(tmp_path: Path) -> None:
     repository, service = await _service(tmp_path / "whole.db")
     game = await service.begin(-300, 1, "One", "one", GameMode.WHOLE_BOARD)
@@ -148,8 +193,10 @@ async def test_whole_board_reroll_retains_previous_result(tmp_path: Path) -> Non
     assert game.setup is not None and game.setup.seed == 100
     assert game.setup.speaker_player_id is None
 
-    while game.status is GameStatus.DRAFTING:
+    while True:
         draft = await repository.get_draft(game.id)
+        if draft.complete:
+            break
         player = next(item for item in game.players if item.id == draft.current_player_id)
         kind = next(
             candidate
@@ -162,6 +209,9 @@ async def test_whole_board_reroll_retains_previous_result(tmp_path: Path) -> Non
         option = (await repository.available_options(game.id, kind))[0]
         game = await service.pick(game, kind, option, player.telegram_user_id or 1)
 
+    assert game.status is GameStatus.DRAFTING
+    assert game.setup is not None and game.setup.speaker_player_id is None
+    game = await service.confirm_start(game, 1)
     assert game.status is GameStatus.COMPLETE
     assert game.setup is not None
     assert game.setup.speaker_player_id in {player.id for player in game.players}
