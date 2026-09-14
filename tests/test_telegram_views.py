@@ -3,7 +3,15 @@ from __future__ import annotations
 import pytest
 
 from tibot.domain.content import ContentCatalog
-from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
+from tibot.domain.models import (
+    Faction,
+    Game,
+    GameMode,
+    GameStatus,
+    GeneratedSetup,
+    PickKind,
+    Player,
+)
 from tibot.telegram.callbacks import SetupCallback
 from tibot.telegram.formatting import FACTION_WIKI_LINKS, faction_link
 from tibot.telegram.handlers import (
@@ -151,6 +159,19 @@ def test_draft_recap_disables_faction_link_previews() -> None:
     options = _recap_link_preview(drafting)
     assert options is not None and options.is_disabled
     assert _recap_link_preview(complete) is None
+
+
+def test_slice_draft_recap_includes_faction_pool() -> None:
+    game = Game(1, -1, GameMode.MILTY, GameStatus.DRAFTING, 1, 1)
+    game.setup = GeneratedSetup(
+        seed=2,
+        factions=[Faction("The Xxcha Kingdom", "14")],
+    )
+
+    text = game_text(game)
+
+    assert "Faction pool:" in text
+    assert "The_Xxcha_Kingdom" in text
 
 
 def test_only_slice_generation_previews_an_empty_board() -> None:
