@@ -72,7 +72,17 @@ def _parse_factions(data: dict[str, Any]) -> tuple[Faction, ...]:
     if not isinstance(mapping, dict):
         reverse = data.get("homeSystemToRaceMap", {})
         mapping = {str(name): str(system) for system, name in reverse.items()}
-    return tuple(Faction(name=name, home_system=str(mapping.get(name, "0"))) for name in names)
+    canonical_names = {
+        "The Lizix Mindnet": "The L1Z1X Mindnet",
+        "The Mahact Gene-sorcerers": "The Mahact Gene-Sorcerers",
+    }
+    return tuple(
+        Faction(
+            name=canonical_names.get(name, name),
+            home_system=str(mapping.get(name, "0")),
+        )
+        for name in names
+    )
 
 
 def _parse_tiles(data: dict[str, Any]) -> dict[str, Tile]:
