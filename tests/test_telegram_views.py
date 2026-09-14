@@ -18,7 +18,6 @@ from tibot.telegram.views import (
     draft_keyboard,
     game_text,
     mode_keyboard,
-    random_keyboard,
     roster_keyboard,
     seed_line,
 )
@@ -163,11 +162,7 @@ def test_only_slice_generation_previews_an_empty_board() -> None:
     assert not _show_empty_board(whole, "reroll")
 
 
-def test_randomizers_include_player_and_parse_nonempty_choice_lines() -> None:
-    labels = [
-        button.text for row in random_keyboard().inline_keyboard for button in row
-    ]
-    assert labels == ["Random player"]
+def test_choice_parser_uses_nonempty_lines() -> None:
     assert _choice_lines("/choice First\n\n Second \nThird") == [
         "First",
         "Second",
