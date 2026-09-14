@@ -149,7 +149,7 @@ In a Telegram group, `/setup` opens the persistent setup wizard. Players join th
 buttons; `/addplayer NAME` creates an offline seat and `/addplayer @handle` creates a seat that the
 matching user can claim by joining. A joined player can use `/removeplayer NAME` to remove an exact
 case-insensitive name while the roster is open. `/claim NAME` explicitly claims a placeholder.
-`/randomize` chooses a random player from the active roster, while `/result` republishes the latest
+`/randomplayer` chooses a random player from the active roster, while `/result` republishes the latest
 setup and board.
 
 For arbitrary choices, send `/choice` followed by one option per line; empty lines are ignored:

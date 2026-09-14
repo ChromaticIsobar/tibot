@@ -8,9 +8,3 @@ class SetupCallback(CallbackData, prefix="s"):
     revision: int
     action: str
     value: str
-
-
-class RandomCallback(CallbackData, prefix="r"):
-    action: str
-    value: int
-

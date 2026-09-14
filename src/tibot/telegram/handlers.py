@@ -13,7 +13,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, LinkPreviewOptions, 
 from tibot.application.service import GameService
 from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
 from tibot.infrastructure.database import ConflictError
-from tibot.telegram.callbacks import RandomCallback, SetupCallback
+from tibot.telegram.callbacks import SetupCallback
 from tibot.telegram.formatting import faction_link
 from tibot.telegram.views import (
     complete_keyboard,
@@ -21,7 +21,6 @@ from tibot.telegram.views import (
     draft_keyboard,
     game_text,
     mode_keyboard,
-    random_keyboard,
     roster_keyboard,
     seed_line,
 )
@@ -44,7 +43,7 @@ def create_router(service: GameService) -> Router:
             "/generate [SEED] [factions=N] [slices=N] - generate with overrides\n"
             "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
-            "/randomize - choose a random roster player\n"
+            "/randomplayer - choose a random roster player\n"
             "/choice - choose from non-empty lines\n"
             "/die N - roll a number from 1 through N\n"
             "/result - show the active setup",
@@ -179,9 +178,20 @@ def create_router(service: GameService) -> Router:
         except (ValueError, ConflictError) as exc:
             await message.answer(html.escape(str(exc)))
 
-    @router.message(Command("randomize"))
-    async def randomize_command(message: Message) -> None:
-        await message.answer("Random player:", reply_markup=random_keyboard())
+    @router.message(Command("randomplayer"))
+    async def random_player_command(message: Message) -> None:
+        game = await service.repository.get_active(message.chat.id)
+        if game is None or not game.players:
+            await message.answer("This command needs an active setup roster.")
+            return
+        player_ids = [player.id for player in game.players if player.id is not None]
+        result = service.generator.random_order(player_ids)
+        names = {player.id: player.display_name for player in game.players}
+        await message.answer(
+            f"Random player: <b>{html.escape(names[result.order[0]])}</b>\n\n"
+            f"{seed_line(result.seed)}",
+            parse_mode="HTML",
+        )
 
     @router.message(Command("choice"))
     async def choice_command(message: Message) -> None:
@@ -335,26 +345,6 @@ def create_router(service: GameService) -> Router:
                 await query.answer(
                     "The setup could not be updated. Try again.", show_alert=True
                 )
-
-    @router.callback_query(RandomCallback.filter())
-    async def random_callback(query: CallbackQuery, callback_data: RandomCallback) -> None:
-        game = await service.repository.get_active(query.message.chat.id) if query.message else None
-        try:
-            if callback_data.action != "player":
-                raise ValueError("This randomizer is no longer available")
-            if game is None or not game.players:
-                raise ValueError("This randomizer needs an active setup roster")
-            player_ids = [player.id for player in game.players if player.id is not None]
-            result = service.generator.random_order(player_ids)
-            names = {player.id: player.display_name for player in game.players}
-            text = f"Random player: {names[result.order[0]]}"
-            await query.answer()
-            if query.message:
-                await query.message.answer(
-                    f"{text}\n\n{seed_line(result.seed)}", parse_mode="HTML"
-                )
-        except ValueError as exc:
-            await query.answer(str(exc), show_alert=True)
 
     return router
 

@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
-from tibot.telegram.callbacks import RandomCallback, SetupCallback
+from tibot.telegram.callbacks import SetupCallback
 from tibot.telegram.formatting import faction_link
 
 
@@ -147,19 +147,6 @@ def complete_keyboard(game: Game) -> InlineKeyboardMarkup | None:
     if game.mode is not GameMode.WHOLE_BOARD:
         return None
     return InlineKeyboardMarkup(inline_keyboard=[[_button(game, "Reroll", "reroll")]])
-
-
-def random_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Random player",
-                    callback_data=RandomCallback(action="player", value=0).pack(),
-                )
-            ]
-        ]
-    )
 
 
 def _button(game: Game, text: str, action: str, value: str = "_") -> InlineKeyboardButton:
