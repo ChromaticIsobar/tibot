@@ -127,6 +127,7 @@ def create_router(service: GameService) -> Router:
                 service.generate(game, seed, factions, slices),
                 service,
                 publish_slices=True,
+                empty_game=game,
             )
         except ValueError as exc:
             await message.answer(html.escape(str(exc)))
@@ -138,7 +139,12 @@ def create_router(service: GameService) -> Router:
             return
         try:
             seed = int(command.args) if command.args else None
-            await _run_message(message, service.generate_board_only(game, seed), service)
+            await _run_message(
+                message,
+                service.generate_board_only(game, seed),
+                service,
+                empty_game=game,
+            )
         except ValueError as exc:
             await message.answer(html.escape(str(exc)))
 
@@ -266,6 +272,8 @@ def create_router(service: GameService) -> Router:
                 if isinstance(query.message, Message):
                     await _dismiss_control(query.message)
                     control_removed = True
+                    if callback_data.action in {"generate", "board_only", "reroll"}:
+                        await _send_empty_board(query.message, game, service)
                 game = await _apply_setup_action(query, callback_data, game, service)
             publish_board = callback_data.action in {"generate", "reroll"}
             if (
@@ -429,6 +437,13 @@ async def _send_board(message: Message, game: Game, service: GameService) -> Non
         )
 
 
+async def _send_empty_board(message: Message, game: Game, service: GameService) -> None:
+    image = await service.render_empty_board(game)
+    await message.answer_photo(
+        BufferedInputFile(image, filename=f"tibot-empty-{len(game.players)}p.png")
+    )
+
+
 async def _send_slices(message: Message, game: Game, service: GameService) -> None:
     assert game.setup is not None
     slices = {item.id: item for item in game.setup.slices}
@@ -489,8 +504,11 @@ async def _run_message(  # type: ignore[no-untyped-def]
     service: GameService,
     *,
     publish_slices: bool = False,
+    empty_game: Game | None = None,
 ) -> None:
     try:
+        if empty_game is not None:
+            await _send_empty_board(message, empty_game, service)
         game = await operation
         if publish_slices:
             await _send_slices(message, game, service)

@@ -130,6 +130,7 @@ hidden behind Telegram spoiler formatting until opened. Seed lines are likewise 
 setup recaps and standalone randomizer results.
 
 When a current inline control is pressed, the bot removes it immediately before doing any work.
+At the start of generation it posts the empty player-count-specific board with numbered seats.
 Generated media and the permanent choice log are then posted, followed by the refreshed recap and
 controls as the newest message. If the operation fails, its error and a restored control panel are
 posted at the bottom instead.
