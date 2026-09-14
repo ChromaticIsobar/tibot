@@ -140,6 +140,38 @@ rm -f ~/tibot/data/tibot.db ~/tibot/data/tibot.db-shm ~/tibot/data/tibot.db-wal
 sudo systemctl start tibot
 ```
 
+### Import an external five-player draft
+
+An in-progress whole-board draft from the legacy generator can be continued in TIBot. First use
+`/setup` in the target Telegram chat, select **Whole board**, add exactly five players, and leave the
+game in the roster phase. The players' display names or Telegram usernames are accepted by the
+import command.
+
+Export the legacy board with `random5wholeboard --export-json PATH`, transfer that JSON file to the
+VM, then stop TIBot and make a database backup before importing:
+
+```bash
+cd ~/tibot
+sudo systemctl stop tibot
+cp data/tibot.db "data/tibot-before-import-$(date +%F-%H%M%S).db"
+
+uv run tibot-import-draft ~/old-board.json \
+  --database data/tibot.db \
+  --order @alice @bob @carol @dave @erin \
+  --pick '@alice|seat|2' \
+  --pick '@bob|faction|Muaat' \
+  --pick '@carol|seat|4'
+
+sudo systemctl start tibot
+sudo systemctl status tibot --no-pager
+```
+
+The order of `--pick` arguments must be chronological. A player may be identified by display name
+or `@username`; faction values accept canonical names or an unambiguous short name. If the database
+contains more than one eligible roster game, the command prints their game and chat IDs without
+changing anything; rerun it with `--game-id ID`. After import, send `/setup` in the group to publish
+the current board and draft controls at the bottom of the chat.
+
 To stop the VM itself, use **Compute Engine → VM instances → Stop** in Google Cloud Console. Starting
 the VM later also starts TIBot when the service is enabled.
 
