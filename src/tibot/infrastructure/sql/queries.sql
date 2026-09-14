@@ -68,8 +68,8 @@ INSERT INTO generated_options VALUES (?, 'seat', ?, '{}', 1);
 SELECT draft_order_json, draft_pick_index, mode FROM games WHERE id=?;
 
 -- name: finalize_setup
-UPDATE games SET setup_json=?, revision=revision+1, updated_at=CURRENT_TIMESTAMP
-WHERE id=? AND revision=?;
+UPDATE games SET setup_json=?, status='complete', revision=revision+1,
+updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND status='drafting';
 
 -- name: update_current_result
 UPDATE results SET payload_json=? WHERE game_id=? AND is_current=1;
@@ -101,6 +101,13 @@ JOIN players AS p ON p.id=dp.player_id
 JOIN games AS g ON g.id=dp.game_id
 WHERE dp.game_id=? AND p.display_name=? COLLATE NOCASE AND dp.kind=?
 AND g.status='drafting' AND g.revision=?
+ORDER BY dp.id DESC LIMIT 1;
+
+-- name: get_last_draft_pick
+SELECT p.display_name, dp.kind FROM draft_picks AS dp
+JOIN players AS p ON p.id=dp.player_id
+JOIN games AS g ON g.id=dp.game_id
+WHERE dp.game_id=? AND g.status='drafting' AND g.revision=?
 ORDER BY dp.id DESC LIMIT 1;
 
 -- name: get_rewound_picks

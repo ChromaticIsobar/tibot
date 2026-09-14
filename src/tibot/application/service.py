@@ -136,16 +136,30 @@ class GameService:
             raise ValueError("Draft is already complete")
         self._require_controller(game, acting_user_id)
         updated = await self.repository.pick(game, player_id, kind, value, acting_user_id)
-        if updated.status is GameStatus.COMPLETE:
-            assert updated.setup is not None
-            await asyncio.to_thread(
-                self.generator.finalize,
-                updated.setup,
-                updated.players,
-                random_speaker=updated.mode is GameMode.WHOLE_BOARD,
-            )
-            updated = await self.repository.finalize_setup(updated)
         return updated
+
+    async def confirm_start(self, game: Game, acting_user_id: int) -> Game:
+        self._require_controller(game, acting_user_id)
+        draft = await self.repository.get_draft(game.id)
+        if not draft.complete:
+            raise ValueError("The draft still has choices remaining")
+        assert game.setup is not None
+        await asyncio.to_thread(
+            self.generator.finalize,
+            game.setup,
+            game.players,
+            random_speaker=game.mode is GameMode.WHOLE_BOARD,
+        )
+        return await self.repository.finalize_setup(game)
+
+    async def undo_last_choice(
+        self, game: Game, acting_user_id: int
+    ) -> tuple[Game, str, PickKind]:
+        self._require_controller(game, acting_user_id)
+        player_name, kind = await self.repository.last_pick(game)
+        rewound = await self.repository.undo_pick(game, player_name, kind)
+        assert rewound == 1
+        return await self._required_game(game.id), player_name, kind
 
     async def undo_choice(
         self,

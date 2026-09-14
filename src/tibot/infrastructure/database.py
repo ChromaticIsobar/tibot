@@ -307,6 +307,15 @@ class GameRepository:
             await self.connection.commit()
             return len(picks)
 
+    async def last_pick(self, game: Game) -> tuple[str, PickKind]:
+        cursor = await self.connection.execute(
+            SQL["get_last_draft_pick"], (game.id, game.revision)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            raise ValueError("This draft has no choice to undo")
+        return str(row["display_name"]), PickKind(row["kind"])
+
     async def reset_completed_draft(self, game: Game) -> Game:
         async with self._lock:
             cursor = await self.connection.execute(
@@ -395,10 +404,9 @@ class GameRepository:
                 (game.id, player_id, kind.value, option_key, picked_by),
             )
             draft.advance()
-            status = GameStatus.COMPLETE if draft.complete else GameStatus.DRAFTING
             cursor = await self.connection.execute(
                 SQL["advance_draft"],
-                (draft.pick_index, status.value, game.id, game.revision),
+                (draft.pick_index, GameStatus.DRAFTING.value, game.id, game.revision),
             )
             if cursor.rowcount != 1:
                 await self.connection.rollback()
