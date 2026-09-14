@@ -83,7 +83,7 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
 
 
 def seed_line(seed: int, label: str = "Seed") -> str:
-    return f"<tg-spoiler>{label}: <code>{seed}</code></tg-spoiler>"
+    return f"<tg-spoiler>{label}: {seed}</tg-spoiler>"
 
 
 def roster_keyboard(game: Game, advanced: bool = False) -> InlineKeyboardMarkup:
