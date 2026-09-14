@@ -11,6 +11,7 @@ from tibot.telegram.views import (
     mode_keyboard,
     random_keyboard,
     roster_keyboard,
+    seed_line,
 )
 
 
@@ -36,7 +37,17 @@ def test_score_and_warnings_are_hidden_as_spoilers() -> None:
     game = Game(1, -1, GameMode.WHOLE_BOARD, GameStatus.COMPLETE, 1, 1)
     game.setup = GeneratedSetup(seed=2, score=4.5, warnings=["check this"])
     text = game_text(game)
+    assert '<tg-spoiler>Seed: <code>2</code></tg-spoiler>' in text
     assert "<tg-spoiler>Board score: 4.5\nWarning: check this</tg-spoiler>" in text
+
+
+def test_seed_line_hides_the_complete_line() -> None:
+    assert seed_line(8169840071781047999) == (
+        "<tg-spoiler>Seed: <code>8169840071781047999</code></tg-spoiler>"
+    )
+    assert seed_line(42, "Speaker seed") == (
+        "<tg-spoiler>Speaker seed: <code>42</code></tg-spoiler>"
+    )
 
 
 def test_active_setup_keyboards_offer_a_new_setup() -> None:
