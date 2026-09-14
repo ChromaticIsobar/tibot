@@ -7,7 +7,7 @@ import pytest
 from tibot.domain import ContentCatalog
 from tibot.domain.layouts import layout_for
 from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
-from tibot.import_draft import _prepare
+from tibot.import_draft import _complete_roster, _prepare
 from tibot.infrastructure.database import GameRepository
 
 
@@ -130,3 +130,44 @@ def test_import_rejects_out_of_order_pick() -> None:
     )
     with pytest.raises(ValueError, match="out of draft order"):
         _prepare(game, _external_board(catalog), ["@one|seat|2"], catalog)
+
+
+@pytest.mark.asyncio
+async def test_import_completes_roster_from_explicit_order(tmp_path: Path) -> None:
+    repository = GameRepository(tmp_path / "roster.db")
+    await repository.open()
+    game = await repository.create_game(-100, 10, GameMode.WHOLE_BOARD)
+    await repository.add_player(game.id, "Alice", 10, "alice")
+    loaded = await repository.get_game(game.id)
+    assert loaded is not None
+
+    completed = await _complete_roster(
+        repository, loaded, ["@alice", "@bob", "@carol", "@dave", "@erin"]
+    )
+
+    assert len(completed.players) == 5
+    assert completed.players[0].telegram_user_id == 10
+    assert {player.telegram_username for player in completed.players} == {
+        "alice",
+        "bob",
+        "carol",
+        "dave",
+        "erin",
+    }
+    await repository.close()
+
+
+@pytest.mark.asyncio
+async def test_import_refuses_unrelated_roster_player(tmp_path: Path) -> None:
+    repository = GameRepository(tmp_path / "unrelated.db")
+    await repository.open()
+    game = await repository.create_game(-100, 10, GameMode.WHOLE_BOARD)
+    await repository.add_player(game.id, "Mallory")
+    loaded = await repository.get_game(game.id)
+    assert loaded is not None
+
+    with pytest.raises(ValueError, match="absent from --order"):
+        await _complete_roster(
+            repository, loaded, ["@alice", "@bob", "@carol", "@dave", "@erin"]
+        )
+    await repository.close()
