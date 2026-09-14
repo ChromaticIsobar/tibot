@@ -8,7 +8,7 @@ import logging
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, LinkPreviewOptions, Message
 
 from tibot.application.service import GameService
 from tibot.domain.models import Game, GameMode, GameStatus, PickKind, Player
@@ -129,7 +129,7 @@ def create_router(service: GameService) -> Router:
                 service.generate(game, seed, factions, slices),
                 service,
                 publish_slices=True,
-                empty_game=game,
+                empty_game=game if _show_empty_board(game, "generate") else None,
             )
         except ValueError as exc:
             await message.answer(html.escape(str(exc)))
@@ -145,7 +145,6 @@ def create_router(service: GameService) -> Router:
                 message,
                 service.generate_board_only(game, seed),
                 service,
-                empty_game=game,
             )
         except ValueError as exc:
             await message.answer(html.escape(str(exc)))
@@ -274,7 +273,7 @@ def create_router(service: GameService) -> Router:
                 if isinstance(query.message, Message):
                     await _dismiss_control(query.message)
                     control_removed = True
-                    if callback_data.action in {"generate", "board_only", "reroll"}:
+                    if _show_empty_board(game, callback_data.action):
                         await _send_empty_board(query.message, game, service)
                 game = await _apply_setup_action(query, callback_data, game, service)
             publish_board = callback_data.action in {"generate", "reroll"}
@@ -405,6 +404,7 @@ async def _send_game(message: Message, game: Game, service: GameService) -> None
         game_text(game, draft_player),
         parse_mode="HTML",
         reply_markup=markup,
+        link_preview_options=_recap_link_preview(game),
     )
 
 
@@ -422,8 +422,21 @@ async def _edit_game(
     if publish_board or game.status is GameStatus.COMPLETE:
         await _send_board(query.message, game, service)
     await query.message.answer(
-        game_text(game, draft_player), parse_mode="HTML", reply_markup=markup
+        game_text(game, draft_player),
+        parse_mode="HTML",
+        reply_markup=markup,
+        link_preview_options=_recap_link_preview(game),
     )
+
+
+def _recap_link_preview(game: Game) -> LinkPreviewOptions | None:
+    if game.status is GameStatus.DRAFTING:
+        return LinkPreviewOptions(is_disabled=True)
+    return None
+
+
+def _show_empty_board(game: Game, action: str) -> bool:
+    return game.mode is GameMode.MILTY and action == "generate"
 
 
 async def _screen(  # type: ignore[no-untyped-def]
