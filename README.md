@@ -169,9 +169,10 @@ Use the **Start new setup** button or `/setup new` to open a replacement mode ch
 or draft is active. The current setup remains resumable until a replacement mode is selected; then
 it is archived atomically, and any older in-flight generation result is rejected as stale.
 
-During a draft, `/undo PLAYER NAME <faction|slice|seat>` rewinds the named choice. If newer choices
-exist, they are rewound as well so snake order remains valid; every restored option becomes available
-again and the recap returns to the affected turn.
+During a draft, `/undo` rewinds the latest choice and can be repeated to walk backward through the
+persisted choice history. `/undo PLAYER NAME <faction|slice|seat>` instead rewinds the named choice.
+If newer choices exist, they are rewound as well so snake order remains valid; every restored option
+becomes available again and the recap returns to the affected turn.
 
 After the final draft choice, the setup waits for confirmation instead of finalizing immediately.
 Use **Undo last choice** to reopen the final turn, or **Start** to place faction homes, resolve the

@@ -39,7 +39,8 @@ def create_router(service: GameService) -> Router:
             "/setup - create or resume a setup\n"
             "/addplayer NAME - add a handle or placeholder\n"
             "/removeplayer NAME - remove a roster player\n"
-            "/undo PLAYER CHOICE - rewind a faction, slice, or seat pick\n"
+            "/undo - undo the latest draft choice\n"
+            "/undo PLAYER CHOICE - rewind a specific faction, slice, or seat pick\n"
             "/generate [SEED] [factions=N] [slices=N] - generate with overrides\n"
             "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
@@ -160,10 +161,14 @@ def create_router(service: GameService) -> Router:
             await message.answer("Join the setup before controlling it.")
             return
         try:
-            player_name, kind = _undo_arguments(command.args)
-            game, rewound = await service.undo_choice(
-                game, player_name, kind, user.id
-            )
+            if command.args and command.args.strip():
+                player_name, kind = _undo_arguments(command.args)
+                game, rewound = await service.undo_choice(
+                    game, player_name, kind, user.id
+                )
+            else:
+                game, player_name, kind = await service.undo_last_choice(game, user.id)
+                rewound = 1
             suffix = "" if rewound == 1 else f" and {rewound - 1} later pick(s)"
             await message.answer(
                 f"<b>{html.escape(user.full_name)}</b> rewound "

@@ -39,7 +39,7 @@ async def run() -> None:
             BotCommand(command="setup", description="Create or resume a game setup"),
             BotCommand(command="addplayer", description="Add a handle or placeholder"),
             BotCommand(command="removeplayer", description="Remove a roster player"),
-            BotCommand(command="undo", description="Rewind a player's draft choice"),
+            BotCommand(command="undo", description="Undo the latest or a selected draft choice"),
             BotCommand(command="generate", description="Generate with seed or pool overrides"),
             BotCommand(command="board", description="Generate only a whole board"),
             BotCommand(command="claim", description="Claim a placeholder seat"),
