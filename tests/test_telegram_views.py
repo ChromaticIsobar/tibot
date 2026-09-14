@@ -6,7 +6,13 @@ from tibot.domain.content import ContentCatalog
 from tibot.domain.models import Game, GameMode, GameStatus, GeneratedSetup, PickKind, Player
 from tibot.telegram.callbacks import SetupCallback
 from tibot.telegram.formatting import FACTION_WIKI_LINKS, faction_link
-from tibot.telegram.handlers import _choice_lines, _pick_log_text, _undo_arguments
+from tibot.telegram.handlers import (
+    _choice_lines,
+    _pick_log_text,
+    _recap_link_preview,
+    _show_empty_board,
+    _undo_arguments,
+)
 from tibot.telegram.views import (
     draft_confirmation_keyboard,
     draft_keyboard,
@@ -138,6 +144,23 @@ def test_current_picker_uses_linked_telegram_handle() -> None:
     placeholder = Player(2, "Offline Player")
     assert "Current pick: <b>@alice</b>" in game_text(game, linked)
     assert "Current pick: <b>Offline Player</b>" in game_text(game, placeholder)
+
+
+def test_draft_recap_disables_faction_link_previews() -> None:
+    drafting = Game(1, -1, GameMode.MILTY, GameStatus.DRAFTING, 1, 1)
+    complete = Game(2, -1, GameMode.MILTY, GameStatus.COMPLETE, 1, 1)
+    options = _recap_link_preview(drafting)
+    assert options is not None and options.is_disabled
+    assert _recap_link_preview(complete) is None
+
+
+def test_only_slice_generation_previews_an_empty_board() -> None:
+    slices = Game(1, -1, GameMode.MILTY, GameStatus.ROSTER, 1, 1)
+    whole = Game(2, -1, GameMode.WHOLE_BOARD, GameStatus.ROSTER, 1, 1)
+    assert _show_empty_board(slices, "generate")
+    assert not _show_empty_board(whole, "generate")
+    assert not _show_empty_board(whole, "board_only")
+    assert not _show_empty_board(whole, "reroll")
 
 
 def test_randomizers_include_player_and_parse_nonempty_choice_lines() -> None:
