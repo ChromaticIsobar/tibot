@@ -105,7 +105,7 @@ def test_faction_links_include_irregular_wiki_pages() -> None:
         '<a href="https://twilight-imperium.fandom.com/wiki/'
         'The_Universities_of_Jol-Nar">The Universities of Jol-Nar</a>'
     )
-    assert FACTION_WIKI_LINKS["The Lizix Mindnet"].endswith("/The_L1Z1X_Mindnet")
+    assert FACTION_WIKI_LINKS["The L1Z1X Mindnet"].endswith("/The_L1Z1X_Mindnet")
     assert FACTION_WIKI_LINKS["The Firmament"].endswith(
         "/The_Firmament_/_The_Obsidian"
     )
@@ -116,6 +116,16 @@ def test_faction_links_include_irregular_wiki_pages() -> None:
 def test_every_catalog_faction_has_a_wiki_link() -> None:
     catalog_names = {faction.name for faction in ContentCatalog.load().factions}
     assert set(FACTION_WIKI_LINKS) == catalog_names
+
+
+def test_legacy_faction_names_link_with_canonical_display_names() -> None:
+    assert faction_link("The Lizix Mindnet") == (
+        '<a href="https://twilight-imperium.fandom.com/wiki/The_L1Z1X_Mindnet">'
+        "The L1Z1X Mindnet</a>"
+    )
+    assert "The Mahact Gene-Sorcerers</a>" in faction_link(
+        "The Mahact Gene-sorcerers"
+    )
 
 
 def test_current_picker_uses_linked_telegram_handle() -> None:

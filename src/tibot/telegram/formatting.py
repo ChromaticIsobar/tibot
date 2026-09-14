@@ -14,12 +14,20 @@ def _load_faction_links() -> dict[str, str]:
 
 
 FACTION_WIKI_LINKS = _load_faction_links()
+LEGACY_FACTION_NAMES = {
+    "The Lizix Mindnet": "The L1Z1X Mindnet",
+    "The Mahact Gene-sorcerers": "The Mahact Gene-Sorcerers",
+}
 
 
 def faction_link(name: str) -> str:
     """Render a faction name as a safe Telegram HTML link."""
+    canonical_name = LEGACY_FACTION_NAMES.get(name, name)
     try:
-        url = FACTION_WIKI_LINKS[name]
+        url = FACTION_WIKI_LINKS[canonical_name]
     except KeyError as exc:
         raise ValueError(f"Missing wiki link for faction: {name}") from exc
-    return f'<a href="{html.escape(url, quote=True)}">{html.escape(name)}</a>'
+    return (
+        f'<a href="{html.escape(url, quote=True)}">'
+        f"{html.escape(canonical_name)}</a>"
+    )
