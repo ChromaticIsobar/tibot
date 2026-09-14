@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,7 +46,12 @@ def _player_id(player: Player) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export", type=Path, help="JSON exported by random5wholeboard.py")
-    parser.add_argument("--database", type=Path, required=True, help="TIBot SQLite database")
+    parser.add_argument(
+        "--database",
+        type=Path,
+        default=Path(os.getenv("DATABASE_PATH", "data/tibot.db")),
+        help="TIBot SQLite database (default: DATABASE_PATH or data/tibot.db)",
+    )
     parser.add_argument(
         "--game-id",
         type=int,
@@ -250,6 +256,16 @@ async def _run(args: argparse.Namespace) -> None:
         raise ValueError("External export must contain a JSON object")
     if args.order:
         data["draft_order"] = args.order
+    raw_players = data.get("players", data.get("draft_order"))
+    if not isinstance(raw_players, list) or not all(
+        isinstance(player, str) for player in raw_players
+    ):
+        raise ValueError("Import JSON must contain a string players list")
+    raw_picks = data.get("picks", []) if not args.pick else args.pick
+    if not isinstance(raw_picks, list) or not all(
+        isinstance(pick, str) for pick in raw_picks
+    ):
+        raise ValueError("Import JSON picks must be PLAYER|KIND|VALUE strings")
     catalog = ContentCatalog.load()
     repository = GameRepository(args.database)
     await repository.open()
@@ -269,9 +285,8 @@ async def _run(args: argparse.Namespace) -> None:
         game = await repository.get_game(game_id)
         if game is None:
             raise ValueError(f"Game {game_id} does not exist")
-        if args.order:
-            game = await _complete_roster(repository, game, args.order)
-        setup, draft, picks = _prepare(game, data, args.pick, catalog)
+        game = await _complete_roster(repository, game, raw_players)
+        setup, draft, picks = _prepare(game, data, raw_picks, catalog)
         game = await repository.save_generation(game, setup, GameStatus.DRAFTING, draft)
         for pick in picks:
             assert pick.player.id is not None
