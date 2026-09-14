@@ -42,6 +42,36 @@ async def test_roster_survives_restart_and_handle_placeholder_is_claimed(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_matching_current_picker_is_claimed_by_first_choice(tmp_path: Path) -> None:
+    repository, service = await _service(tmp_path / "pick-claim.db")
+    game = await repository.create_game(-101, 1, GameMode.WHOLE_BOARD)
+    for username in ("alice", "bob", "carol"):
+        await repository.add_player(
+            game.id, f"@{username}", telegram_username=username
+        )
+    loaded = await repository.get_game(game.id)
+    assert loaded is not None
+    game = await service.generate(loaded, seed=17)
+    draft = await repository.get_draft(game.id)
+    current = next(player for player in game.players if player.id == draft.current_player_id)
+    assert current.telegram_username is not None
+    faction = (await repository.available_options(game.id, PickKind.FACTION))[0]
+
+    game = await service.pick(
+        game,
+        PickKind.FACTION,
+        faction,
+        99,
+        current.telegram_username.upper(),
+    )
+
+    claimed = next(player for player in game.players if player.id == current.id)
+    assert claimed.telegram_user_id == 99
+    assert claimed.faction == faction
+    await repository.close()
+
+
+@pytest.mark.asyncio
 async def test_joined_player_can_remove_exact_roster_name(tmp_path: Path) -> None:
     repository, service = await _service(tmp_path / "remove-player.db")
     game = await service.begin(-150, 11, "Creator", "creator", GameMode.MILTY)
