@@ -87,6 +87,62 @@ This is destructive. For a local non-Docker run, stop the bot and delete the con
 rm -f data/tibot.db data/tibot.db-shm data/tibot.db-wal
 ```
 
+## Google Compute Engine without Docker
+
+The bot can run directly on a small Ubuntu VM through `systemd`. The deployed checkout in the
+examples below is `/home/YOUR_USER/tibot`; replace `YOUR_USER` with the VM account name.
+
+Install or update the checked-out application:
+
+```bash
+cd ~/tibot
+git pull --ff-only
+git submodule update --init --recursive
+uv sync --locked --no-dev
+sudo systemctl restart tibot
+```
+
+Useful service operations:
+
+```bash
+sudo systemctl status tibot --no-pager  # show current status
+sudo systemctl restart tibot            # restart after configuration changes
+sudo systemctl stop tibot               # stop the bot
+sudo systemctl start tibot              # start the bot
+sudo systemctl enable tibot             # start automatically after VM reboots
+sudo systemctl disable tibot            # disable automatic startup
+journalctl -u tibot -f                   # follow live logs; Ctrl-C only leaves the log viewer
+journalctl -u tibot -n 100 --no-pager   # show the latest 100 log lines
+```
+
+The service configuration is `/etc/systemd/system/tibot.service`, and its private environment file
+is `/etc/tibot/tibot.env`. After changing the service file, reload and restart it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart tibot
+```
+
+Back up the SQLite database while the bot is stopped so the database and WAL files remain
+consistent:
+
+```bash
+sudo systemctl stop tibot
+cp ~/tibot/data/tibot.db ~/tibot/data/tibot-backup-$(date +%F).db
+sudo systemctl start tibot
+```
+
+To permanently delete every saved game on the VM and create a fresh database on next startup:
+
+```bash
+sudo systemctl stop tibot
+rm -f ~/tibot/data/tibot.db ~/tibot/data/tibot.db-shm ~/tibot/data/tibot.db-wal
+sudo systemctl start tibot
+```
+
+To stop the VM itself, use **Compute Engine → VM instances → Stop** in Google Cloud Console. Starting
+the VM later also starts TIBot when the service is enabled.
+
 ## Telegram usage
 
 In a Telegram group, `/setup` opens the persistent setup wizard. Players join through its inline
