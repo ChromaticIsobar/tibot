@@ -126,6 +126,10 @@ def test_legacy_faction_names_link_with_canonical_display_names() -> None:
     assert "The Mahact Gene-Sorcerers</a>" in faction_link(
         "The Mahact Gene-sorcerers"
     )
+    assert faction_link("The Vuil'raith Cabal") == (
+        '<a href="https://twilight-imperium.fandom.com/wiki/The_Vuil%27Raith_Cabal">'
+        "The Vuil&#x27;Raith Cabal</a>"
+    )
 
 
 def test_current_picker_uses_linked_telegram_handle() -> None:

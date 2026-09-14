@@ -17,6 +17,7 @@ FACTION_WIKI_LINKS = _load_faction_links()
 LEGACY_FACTION_NAMES = {
     "The Lizix Mindnet": "The L1Z1X Mindnet",
     "The Mahact Gene-sorcerers": "The Mahact Gene-Sorcerers",
+    "The Vuil'raith Cabal": "The Vuil'Raith Cabal",
 }
 
 

@@ -75,6 +75,7 @@ def _parse_factions(data: dict[str, Any]) -> tuple[Faction, ...]:
     canonical_names = {
         "The Lizix Mindnet": "The L1Z1X Mindnet",
         "The Mahact Gene-sorcerers": "The Mahact Gene-Sorcerers",
+        "The Vuil'raith Cabal": "The Vuil'Raith Cabal",
     }
     return tuple(
         Faction(
