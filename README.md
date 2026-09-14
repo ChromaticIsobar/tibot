@@ -173,6 +173,14 @@ persisted choice history. `/undo PLAYER NAME <faction|slice|seat>` instead rewin
 If newer choices exist, they are rewound as well so snake order remains valid; every restored option
 becomes available again and the recap returns to the affected turn.
 
+Examples for each targeted choice type:
+
+```text
+/undo Alice faction
+/undo Bob Smith slice
+/undo Charlie seat
+```
+
 After the final draft choice, the setup waits for confirmation instead of finalizing immediately.
 Use **Undo last choice** to reopen the final turn, or **Start** to place faction homes, resolve the
 Speaker rule, complete the setup, and publish the final board.
