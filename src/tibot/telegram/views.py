@@ -51,7 +51,7 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
         )
         lines.extend(("", f"Current pick: <b>{picker}</b>"))
     if game.setup is not None:
-        lines.extend(("", f"Seed: <code>{game.setup.seed}</code>"))
+        lines.extend(("", seed_line(game.setup.seed)))
         names = {player.id: player.display_name for player in game.players}
         if game.setup.order:
             lines.extend(("", "Draft order:"))
@@ -72,7 +72,7 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
         if game.setup.speaker_player_id is not None:
             lines.extend(("", f"Speaker: <b>{names[game.setup.speaker_player_id]}</b>"))
             if game.setup.speaker_seed is not None:
-                lines.append(f"Speaker seed: <code>{game.setup.speaker_seed}</code>")
+                lines.append(seed_line(game.setup.speaker_seed, "Speaker seed"))
         diagnostics: list[str] = []
         if game.setup.score is not None:
             diagnostics.append(f"Board score: {game.setup.score}")
@@ -80,6 +80,10 @@ def game_text(game: Game, draft_player: Player | None = None) -> str:
         if diagnostics:
             lines.extend(("", f"<tg-spoiler>{'\n'.join(diagnostics)}</tg-spoiler>"))
     return "\n".join(lines)
+
+
+def seed_line(seed: int, label: str = "Seed") -> str:
+    return f"<tg-spoiler>{label}: <code>{seed}</code></tg-spoiler>"
 
 
 def roster_keyboard(game: Game, advanced: bool = False) -> InlineKeyboardMarkup:

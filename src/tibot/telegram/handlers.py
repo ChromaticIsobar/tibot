@@ -21,6 +21,7 @@ from tibot.telegram.views import (
     mode_keyboard,
     random_keyboard,
     roster_keyboard,
+    seed_line,
 )
 
 logger = logging.getLogger(__name__)
@@ -175,7 +176,7 @@ def create_router(service: GameService) -> Router:
         try:
             choice, seed = service.generator.random_choice(_choice_lines(message.text))
             await message.answer(
-                f"Choice: <b>{html.escape(choice)}</b>\n\nSeed: <code>{seed}</code>",
+                f"Choice: <b>{html.escape(choice)}</b>\n\n{seed_line(seed)}",
                 parse_mode="HTML",
             )
         except ValueError as exc:
@@ -191,7 +192,7 @@ def create_router(service: GameService) -> Router:
                 raise ValueError("Usage: /die N")
             result, seed = service.generator.random_die(int(command.args))
             await message.answer(
-                f"d{int(command.args)}: <b>{result}</b>\n\nSeed: <code>{seed}</code>",
+                f"d{int(command.args)}: <b>{result}</b>\n\n{seed_line(seed)}",
                 parse_mode="HTML",
             )
         except ValueError as exc:
@@ -304,7 +305,7 @@ def create_router(service: GameService) -> Router:
             await query.answer()
             if query.message:
                 await query.message.answer(
-                    f"{text}\n\nSeed: <code>{result.seed}</code>", parse_mode="HTML"
+                    f"{text}\n\n{seed_line(result.seed)}", parse_mode="HTML"
                 )
         except ValueError as exc:
             await query.answer(str(exc), show_alert=True)

@@ -126,7 +126,8 @@ Generated slice choices are published as images. During a draft, the bot publish
 board as soon as a player claims a seat, showing their name on its home placeholder. Later faction
 and slice picks refresh that placement with the newly known content. Each successful choice also
 remains in the chat as a lightweight accountability log. Board scores and generator warnings are
-hidden behind Telegram spoiler formatting until opened.
+hidden behind Telegram spoiler formatting until opened. Seed lines are likewise hidden in full in
+setup recaps and standalone randomizer results.
 
 After every action, generated media and the permanent choice log are posted first. The bot then
 reposts the current recap and controls as the newest message, so the active UI stays at the bottom
