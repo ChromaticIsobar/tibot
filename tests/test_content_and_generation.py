@@ -99,6 +99,21 @@ def test_five_player_hyperlanes_match_the_original_layout() -> None:
     )
 
 
+@pytest.mark.parametrize("player_count", range(3, 7))
+@pytest.mark.parametrize("slices", (False, True))
+def test_empty_generation_board_has_numbered_seat_geometry(
+    catalog: ContentCatalog, player_count: int, slices: bool
+) -> None:
+    board = SetupGenerator(catalog).empty_board(player_count, slices=slices)
+    assert sum(tile.role is BoardRole.HOME_PLACEHOLDER for tile in board.tiles) == player_count
+    assert sum(tile.position.radius == 0 for tile in board.tiles) == 1
+    assert sum(tile.role is BoardRole.HYPERLANE for tile in board.tiles) == (
+        6 if player_count == 5 else 0
+    )
+    image = BoardRenderer(catalog.tile_image_dir).render_board(board)
+    assert image.startswith(b"\x89PNG\r\n\x1a\n")
+
+
 @pytest.mark.parametrize(
     ("player_count", "blue", "red", "anomalies"),
     ((3, 14, 10, 6), (4, 20, 12, 9), (5, 15, 10, 5), (6, 18, 12, 6)),
