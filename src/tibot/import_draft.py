@@ -83,6 +83,43 @@ def _player(game: Game, reference: str) -> Player:
     return matches[0]
 
 
+def _player_keys(player: Player) -> set[str]:
+    return {
+        player.display_name.strip().removeprefix("@").casefold(),
+        (player.telegram_username or "").strip().removeprefix("@").casefold(),
+    } - {""}
+
+
+async def _complete_roster(
+    repository: GameRepository, game: Game, references: list[str]
+) -> Game:
+    wanted = [reference.strip().removeprefix("@").casefold() for reference in references]
+    if len(wanted) != 5 or len(set(wanted)) != 5 or any(not item for item in wanted):
+        raise ValueError("--order must contain five unique, non-empty players")
+    unrelated = [
+        player.display_name
+        for player in game.players
+        if _player_keys(player).isdisjoint(wanted)
+    ]
+    if unrelated:
+        raise ValueError(
+            "Target roster contains players absent from --order: " + ", ".join(unrelated)
+        )
+    matched = {key for player in game.players for key in _player_keys(player)}
+    for reference, key in zip(references, wanted, strict=True):
+        if key in matched:
+            continue
+        username = (
+            reference.strip().removeprefix("@")
+            if reference.strip().startswith("@")
+            else None
+        )
+        await repository.add_player(game.id, reference.strip(), telegram_username=username)
+    completed = await repository.get_game(game.id)
+    assert completed is not None
+    return completed
+
+
 def _faction(reference: str, catalog: ContentCatalog) -> Faction:
     wanted = LEGACY_FACTION_NAMES.get(reference.strip(), reference.strip()).casefold()
     matches = [
@@ -232,6 +269,8 @@ async def _run(args: argparse.Namespace) -> None:
         game = await repository.get_game(game_id)
         if game is None:
             raise ValueError(f"Game {game_id} does not exist")
+        if args.order:
+            game = await _complete_roster(repository, game, args.order)
         setup, draft, picks = _prepare(game, data, args.pick, catalog)
         game = await repository.save_generation(game, setup, GameStatus.DRAFTING, draft)
         for pick in picks:
