@@ -155,22 +155,18 @@ cd ~/tibot
 sudo systemctl stop tibot
 cp data/tibot.db "data/tibot-before-import-$(date +%F-%H%M%S).db"
 
-uv run tibot-import-draft ~/old-board.json \
-  --database data/tibot.db \
-  --order @alice @bob @carol @dave @erin \
-  --pick '@alice|seat|2' \
-  --pick '@bob|faction|Muaat' \
-  --pick '@carol|seat|4'
+uv run tibot-import-draft ~/old-board.json
 
 sudo systemctl start tibot
 sudo systemctl status tibot --no-pager
 ```
 
-The order of `--pick` arguments must be chronological. A player may be identified by display name
-or `@username`; faction values accept canonical names or an unambiguous short name. If the database
-contains more than one eligible roster game, the command prints their game and chat IDs without
-changing anything; rerun it with `--game-id ID`. After import, send `/setup` in the group to publish
-the current board and draft controls at the bottom of the chat.
+The JSON contains the players, draft order, and chronological picks. A player may be identified by
+display name or `@username`; faction values accept canonical names or an unambiguous short name.
+`--database` may be omitted when `DATABASE_PATH` is set or the database is at `data/tibot.db`. If
+the database contains more than one eligible roster game, the command prints their game and chat
+IDs without changing anything; rerun it with `--game-id ID`. After import, send `/setup` in the
+group to publish the current board and draft controls at the bottom of the chat.
 
 To stop the VM itself, use **Compute Engine → VM instances → Stop** in Google Cloud Console. Starting
 the VM later also starts TIBot when the service is enabled.
