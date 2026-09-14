@@ -211,8 +211,14 @@ def create_router(service: GameService) -> Router:
         if query.message is None:
             return
         picked_player_id: int | None = None
+        game: Game | None = None
+        control_removed = False
         try:
             if callback_data.action == "new":
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await _dismiss_control(query.message)
+                    control_removed = True
                 game = await service.begin(
                     query.message.chat.id,
                     query.from_user.id,
@@ -236,6 +242,9 @@ def create_router(service: GameService) -> Router:
                     return
                 if callback_data.action == "advanced":
                     await query.answer()
+                    if isinstance(query.message, Message):
+                        await _dismiss_control(query.message)
+                        control_removed = True
                     await _edit_game(query, game, service, advanced=True)
                     return
                 if callback_data.action == "help_add":
@@ -253,8 +262,11 @@ def create_router(service: GameService) -> Router:
                 if callback_data.action in {kind.value for kind in PickKind}:
                     draft = await service.repository.get_draft(game.id)
                     picked_player_id = draft.current_player_id
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await _dismiss_control(query.message)
+                    control_removed = True
                 game = await _apply_setup_action(query, callback_data, game, service)
-            await query.answer()
             publish_board = callback_data.action in {"generate", "reroll"}
             if (
                 callback_data.action == "generate"
@@ -277,10 +289,34 @@ def create_router(service: GameService) -> Router:
                 publish_board = _pick_changes_board(game, picked_player_id)
             await _edit_game(query, game, service, publish_board=publish_board)
         except (ValueError, ConflictError) as exc:
-            await query.answer(str(exc), show_alert=True)
+            if control_removed and isinstance(query.message, Message):
+                await query.message.answer(html.escape(str(exc)))
+                if game is not None:
+                    current = await service.repository.get_game(game.id)
+                    if current is not None:
+                        await _send_game(query.message, current, service)
+                else:
+                    await query.message.answer(
+                        "Choose a setup mode:", reply_markup=mode_keyboard()
+                    )
+            else:
+                await query.answer(str(exc), show_alert=True)
         except Exception:
             logger.exception("Setup callback failed")
-            await query.answer("The setup could not be updated. Try again.", show_alert=True)
+            if control_removed and isinstance(query.message, Message):
+                await query.message.answer("The setup could not be updated. Try again.")
+                if game is not None:
+                    current = await service.repository.get_game(game.id)
+                    if current is not None:
+                        await _send_game(query.message, current, service)
+                else:
+                    await query.message.answer(
+                        "Choose a setup mode:", reply_markup=mode_keyboard()
+                    )
+            else:
+                await query.answer(
+                    "The setup could not be updated. Try again.", show_alert=True
+                )
 
     @router.callback_query(RandomCallback.filter())
     async def random_callback(query: CallbackQuery, callback_data: RandomCallback) -> None:
@@ -364,10 +400,6 @@ async def _edit_game(
     draft_player, markup = await _screen(game, service, advanced=advanced)
     if publish_board or game.status is GameStatus.COMPLETE:
         await _send_board(query.message, game, service)
-    try:
-        await query.message.delete()
-    except TelegramBadRequest:
-        await query.message.edit_reply_markup(reply_markup=None)
     await query.message.answer(
         game_text(game, draft_player), parse_mode="HTML", reply_markup=markup
     )
@@ -522,8 +554,12 @@ def _undo_arguments(arguments: str | None) -> tuple[str, PickKind]:
 
 
 async def _replace_with_mode_picker(message: Message) -> None:
+    await _dismiss_control(message)
+    await message.answer("Choose a new setup mode:", reply_markup=mode_keyboard())
+
+
+async def _dismiss_control(message: Message) -> None:
     try:
         await message.delete()
     except TelegramBadRequest:
         await message.edit_reply_markup(reply_markup=None)
-    await message.answer("Choose a new setup mode:", reply_markup=mode_keyboard())

@@ -129,9 +129,10 @@ remains in the chat as a lightweight accountability log. Board scores and genera
 hidden behind Telegram spoiler formatting until opened. Seed lines are likewise hidden in full in
 setup recaps and standalone randomizer results.
 
-After every action, generated media and the permanent choice log are posted first. The bot then
-reposts the current recap and controls as the newest message, so the active UI stays at the bottom
-of the conversation instead of requiring players to scroll upward.
+When a current inline control is pressed, the bot removes it immediately before doing any work.
+Generated media and the permanent choice log are then posted, followed by the refreshed recap and
+controls as the newest message. If the operation fails, its error and a restored control panel are
+posted at the bottom instead.
 
 The roster screen's **Advanced commands** panel links to manual player and generation controls.
 Use `/generate [SEED] [factions=N] [slices=N]` to reproduce a seed or override pool sizes. `slices=N`
