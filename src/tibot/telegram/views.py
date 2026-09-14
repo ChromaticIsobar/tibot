@@ -150,18 +150,16 @@ def complete_keyboard(game: Game) -> InlineKeyboardMarkup | None:
 
 
 def random_keyboard() -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    for count in range(3, 9):
-        builder.button(
-            text=f"{count} factions",
-            callback_data=RandomCallback(action="factions", value=count),
-        )
-    builder.button(text="Player order", callback_data=RandomCallback(action="order", value=0))
-    builder.button(text="Random player", callback_data=RandomCallback(action="player", value=0))
-    builder.button(text="Speaker", callback_data=RandomCallback(action="speaker", value=0))
-    builder.button(text="Seating order", callback_data=RandomCallback(action="seating", value=0))
-    builder.adjust(2)
-    return builder.as_markup()
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Random player",
+                    callback_data=RandomCallback(action="player", value=0).pack(),
+                )
+            ]
+        ]
+    )
 
 
 def _button(game: Game, text: str, action: str, value: str = "_") -> InlineKeyboardButton:

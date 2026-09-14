@@ -44,7 +44,7 @@ def create_router(service: GameService) -> Router:
             "/generate [SEED] [factions=N] [slices=N] - generate with overrides\n"
             "/board [SEED] - generate only a whole board\n"
             "/claim NAME - claim a placeholder\n"
-            "/randomize - standalone randomizers\n"
+            "/randomize - choose a random roster player\n"
             "/choice - choose from non-empty lines\n"
             "/die N - roll a number from 1 through N\n"
             "/result - show the active setup",
@@ -181,7 +181,7 @@ def create_router(service: GameService) -> Router:
 
     @router.message(Command("randomize"))
     async def randomize_command(message: Message) -> None:
-        await message.answer("Choose a randomizer:", reply_markup=random_keyboard())
+        await message.answer("Random player:", reply_markup=random_keyboard())
 
     @router.message(Command("choice"))
     async def choice_command(message: Message) -> None:
@@ -340,24 +340,14 @@ def create_router(service: GameService) -> Router:
     async def random_callback(query: CallbackQuery, callback_data: RandomCallback) -> None:
         game = await service.repository.get_active(query.message.chat.id) if query.message else None
         try:
-            if callback_data.action == "factions":
-                result = service.generator.random_factions(callback_data.value)
-                text = "\n".join(
-                    f"{i}. {faction_link(f.name)}" for i, f in enumerate(result.factions, 1)
-                )
-            else:
-                if game is None or not game.players:
-                    raise ValueError("This randomizer needs an active setup roster")
-                player_ids = [player.id for player in game.players if player.id is not None]
-                result = service.generator.random_order(player_ids)
-                names = {player.id: player.display_name for player in game.players}
-                ordered = [names[player_id] for player_id in result.order]
-                if callback_data.action == "speaker":
-                    text = f"Speaker: {ordered[0]}"
-                elif callback_data.action == "player":
-                    text = f"Random player: {ordered[0]}"
-                else:
-                    text = "\n".join(f"{i}. {name}" for i, name in enumerate(ordered, 1))
+            if callback_data.action != "player":
+                raise ValueError("This randomizer is no longer available")
+            if game is None or not game.players:
+                raise ValueError("This randomizer needs an active setup roster")
+            player_ids = [player.id for player in game.players if player.id is not None]
+            result = service.generator.random_order(player_ids)
+            names = {player.id: player.display_name for player in game.players}
+            text = f"Random player: {names[result.order[0]]}"
             await query.answer()
             if query.message:
                 await query.message.answer(

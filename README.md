@@ -148,12 +148,11 @@ the VM later also starts TIBot when the service is enabled.
 In a Telegram group, `/setup` opens the persistent setup wizard. Players join through its inline
 buttons; `/addplayer NAME` creates an offline seat and `/addplayer @handle` creates a seat that the
 matching user can claim by joining. A joined player can use `/removeplayer NAME` to remove an exact
-case-insensitive name while the roster is open. `/claim NAME` explicitly claims a placeholder. `/randomize`
-opens the standalone faction, order, speaker, and seating tools, while `/result` republishes the
-latest setup and board.
+case-insensitive name while the roster is open. `/claim NAME` explicitly claims a placeholder.
+`/randomize` chooses a random player from the active roster, while `/result` republishes the latest
+setup and board.
 
-The `/randomize` panel also selects a random player from the active roster. For arbitrary choices,
-send `/choice` followed by one option per line; empty lines are ignored:
+For arbitrary choices, send `/choice` followed by one option per line; empty lines are ignored:
 
 ```text
 /choice
