@@ -167,15 +167,33 @@ async def test_completed_draft_can_undo_last_choice_before_start(tmp_path: Path)
 
     assert game.status is GameStatus.DRAFTING
     assert game.setup is not None and game.setup.speaker_player_id is None
+    completed_pick_index = (await repository.get_draft(game.id)).pick_index
     game, player_name, kind = await service.undo_last_choice(game, 101)
     draft = await repository.get_draft(game.id)
     assert not draft.complete
+    assert draft.pick_index == completed_pick_index - 1
     assert draft.current_player_id == next(
         player.id for player in game.players if player.display_name == player_name
     )
 
-    option = (await repository.available_options(game.id, kind))[0]
-    game = await service.pick(game, kind, option, 101)
+    game, _, _ = await service.undo_last_choice(game, 101)
+    assert (await repository.get_draft(game.id)).pick_index == completed_pick_index - 2
+
+    while True:
+        draft = await repository.get_draft(game.id)
+        if draft.complete:
+            break
+        player = next(item for item in game.players if item.id == draft.current_player_id)
+        kind = next(
+            candidate
+            for candidate, current in (
+                (PickKind.FACTION, player.faction),
+                (PickKind.SEAT, player.seat),
+            )
+            if current is None
+        )
+        option = (await repository.available_options(game.id, kind))[0]
+        game = await service.pick(game, kind, option, 101)
     game = await service.confirm_start(game, 101)
     assert game.status is GameStatus.COMPLETE
     assert game.setup is not None and game.setup.speaker_player_id is not None
